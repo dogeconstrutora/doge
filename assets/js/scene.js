@@ -287,10 +287,24 @@ export function panDelta(dx, dy){
 }
 
 // Aplica zoom relativo (delta de wheel)
-export function zoomDelta(sign){
-  const step = Math.max(0.5, (State.radius || 20) * ZOOM_STEP_FACTOR);
+// Ajuste suave de zoom (diferencia pinch vs scroll)
+export function zoomDelta(sign, isTouch = false){
+  const r = State.radius || 20;
+
+  let step;
+  if (isTouch){
+    // 👆 Pinch → step fixo suave (independente da distância)
+    step = 0.08;   // ajuste fino (quanto menor, mais suave)
+  } else {
+    // 🖱️ Scroll → proporcional mas reduzido (mais confortável)
+    const ZOOM_STEP_FACTOR = 0.00025; // antes era 0.001 → mais leve
+    step = Math.max(0.05, r * ZOOM_STEP_FACTOR);
+  }
+
   State.radius += sign * step;
   State.radius = Math.max(4, Math.min(400, State.radius));
+
   applyOrbitToCamera();
   render();
 }
+
