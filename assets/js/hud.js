@@ -333,7 +333,6 @@ export function initHUD(){
     const toggleHud = () => {
       hudEl.classList.toggle('collapsed');
       syncExpanded();
-      try{ window.dispatchEvent(new Event('resize')); }catch(_){}
     };
 
     hudHandle.addEventListener('click', toggleHud, { passive: true });
@@ -360,7 +359,7 @@ export function initHUD(){
       curY = ev.clientY ?? ev.touches?.[0]?.clientY ?? 0;
       const dy = curY - startY;
       const clamped = Math.max(-60, Math.min(60, dy));
-      hudEl.style.transform = `translateY(${clamped}px)`;
+     hudEl.style.transform = `translateY(${clamped}px)`;
     };
     const onPU = ()=>{
       if (!dragging) return;
@@ -371,7 +370,6 @@ export function initHUD(){
       if (dy <= -THRESHOLD){ hudEl.classList.remove('collapsed'); }
       else if (dy >= THRESHOLD){ hudEl.classList.add('collapsed'); }
       syncExpanded();
-      try{ window.dispatchEvent(new Event('resize')); }catch(_){}
     };
     hudHandle.addEventListener('pointerdown', onPD, { passive:true });
     hudHandle.addEventListener('pointermove', onPM, { passive:true });
@@ -788,3 +786,5 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
+
+
