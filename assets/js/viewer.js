@@ -30,6 +30,27 @@ import { initPicking, selectGroup } from './picking.js';
 import { initModal } from './modal.js';
 import { initHUD, applyFVSAndRefresh } from './hud.js';
 
+// ---- Helpers p/ (re)ativar canvas e resetar input ----
+function getCanvas() {
+  return document.getElementById('doge-canvas') || document.querySelector('#app canvas');
+}
+function enableCanvasPointerEvents(enable = true) {
+  const cvs = getCanvas();
+  if (!cvs) return;
+  cvs.style.pointerEvents = enable ? 'auto' : 'none';
+  if (enable) cvs.focus?.();
+}
+function releaseAllPointerCapture() {
+  const cvs = getCanvas();
+  if (!cvs) return;
+  try {
+    // não há API para listar; tentamos soltar alguns ids comuns
+    for (let id = 0; id < 32; id++) cvs.releasePointerCapture?.(id);
+  } catch {}
+}
+// preenchido dentro de wireUnifiedInput()
+let __clearInputStateHard = () => {};
+
 // ============================
 // Boot
 // ============================
@@ -141,6 +162,47 @@ import { initHUD, applyFVSAndRefresh } from './hud.js';
 
     // Input
     wireUnifiedInput();
+
+    // ========== Integração com Modal: mantém canvas vivo após Cancelar ==========
+    (function guardModalIntegration(){
+      const backdrop = document.getElementById('doge-modal-backdrop');
+
+      // 1) Se o modal.js disparar eventos, escute:
+      window.addEventListener('doge:modal:open', () => {
+        enableCanvasPointerEvents(false);
+      });
+      window.addEventListener('doge:modal:close', () => {
+        enableCanvasPointerEvents(true);
+        __clearInputStateHard?.();
+      });
+
+      // 2) Fallback: observar atributo aria-hidden do backdrop
+      if (backdrop) {
+        const mo = new MutationObserver(() => {
+          const hidden = backdrop.getAttribute('aria-hidden');
+          if (hidden === 'false') {
+            // modal aberto
+            enableCanvasPointerEvents(false);
+          } else {
+            // modal fechado (inclusive Cancelar)
+            enableCanvasPointerEvents(true);
+            __clearInputStateHard?.();
+          }
+        });
+        mo.observe(backdrop, { attributes: true, attributeFilter: ['aria-hidden'] });
+      }
+
+      // 3) Fallback extra: ao pressionar ESC global (fecha modal), reabilitar
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          setTimeout(() => {
+            enableCanvasPointerEvents(true);
+            __clearInputStateHard?.();
+          }, 0);
+        }
+      }, { passive: true });
+    })();
+
   } catch (err){
     console.error('[viewer] erro no boot:', err);
   }
@@ -436,4 +498,17 @@ function wireUnifiedInput(){
 
   // Bloqueia menu do botão direito (necessário para twist com right-drag)
   cvs.addEventListener('contextmenu', e => e.preventDefault(), { passive:false });
+
+  // ---- Reset “hard” do estado de input (após modal fechar, etc.) ----
+  __clearInputStateHard = () => {
+    pointers.clear();
+    pinchPrevDist = 0;
+    pinchPrevMid  = null;
+    pinchPrevAng  = 0;
+    panLatchUntil = 0;
+    touchPanArmedUntil = 0;
+    __spacePressed = false;
+    releaseAllPointerCapture();
+    enableCanvasPointerEvents(true);
+  };
 }
