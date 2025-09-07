@@ -30,26 +30,67 @@ import { initPicking, selectGroup } from './picking.js';
 import { initModal } from './modal.js';
 import { initHUD, applyFVSAndRefresh } from './hud.js';
 
-// ---- Helpers p/ (re)ativar canvas e resetar input ----
-function getCanvas() {
+// ============================
+// Debug helpers (não alteram estado do viewer)
+// ============================
+(function ensureDOGE(){
+  if (!window.DOGE) window.DOGE = {};
+})();
+function getCanvas(){
   return document.getElementById('doge-canvas') || document.querySelector('#app canvas');
 }
-function enableCanvasPointerEvents(enable = true) {
-  const cvs = getCanvas();
-  if (!cvs) return;
-  cvs.style.pointerEvents = enable ? 'auto' : 'none';
-  if (enable) cvs.focus?.();
+function dbgGetBackdrop(){
+  return document.getElementById('doge-modal-backdrop') || null;
 }
-function releaseAllPointerCapture() {
-  const cvs = getCanvas();
-  if (!cvs) return;
-  try {
-    // não há API para listar; tentamos soltar alguns ids comuns
-    for (let id = 0; id < 32; id++) cvs.releasePointerCapture?.(id);
-  } catch {}
+function snap(label, extra = {}){
+  try{
+    const cvs = getCanvas();
+    const bd  = dbgGetBackdrop();
+    const peInline = cvs?.style?.pointerEvents || '(none-inline)';
+    const peComputed = cvs ? getComputedStyle(cvs).pointerEvents : '(no-canvas)';
+    const active = document.activeElement;
+    const actStr = active ? `${active.tagName.toLowerCase()}#${active.id||''}.${(active.className||'').toString().split(' ').slice(0,2).join('.')}` : '(null)';
+    const dbg = window.DOGE?.__inputDbg || {};
+    const capIds = Array.from(dbg.captures || []);
+    const payload = {
+      label,
+      time: `${Math.round(performance.now())}ms`,
+      backdrop: bd ? {
+        ariaHidden: bd.getAttribute('aria-hidden'),
+        hasShowClass: bd.classList.contains('show')
+      } : '(no-backdrop)',
+      canvas: {
+        inlinePointerEvents: peInline,
+        computedPointerEvents: peComputed
+      },
+      activeElement: actStr,
+      pointersSize: dbg.pointers?.size ?? '(n/a)',
+      counters: {
+        pointerdown: dbg.cntDown|0,
+        pointerup: dbg.cntUp|0,
+        lostcapture: dbg.cntLost|0,
+        wheel: dbg.cntWheel|0,
+        gesture: dbg.cntGesture|0
+      },
+      captures: capIds,
+      state: {
+        orbitTarget: { x: +State.orbitTarget?.x?.toFixed?.(3) || 0, y: +State.orbitTarget?.y?.toFixed?.(3) || 0, z: +State.orbitTarget?.z?.toFixed?.(3) || 0 },
+        radius: +(+State.radius || 0).toFixed(3),
+        theta: +(+State.theta || 0).toFixed(3),
+        phi: +(+State.phi || 0).toFixed(3)
+      },
+      camera: camera ? {
+        pos: { x:+camera.position.x.toFixed(3), y:+camera.position.y.toFixed(3), z:+camera.position.z.toFixed(3) },
+        up:  { x:+camera.up.x.toFixed(3), y:+camera.up.y.toFixed(3), z:+camera.up.z.toFixed(3) }
+      } : '(no-camera)',
+      ...extra
+    };
+    console.log('[DOGE:snap]', payload);
+  }catch(err){
+    console.warn('[DOGE:snap:error]', err);
+  }
 }
-// preenchido dentro de wireUnifiedInput()
-let __clearInputStateHard = () => {};
+window.DOGE.snap = snap;
 
 // ============================
 // Boot
@@ -107,7 +148,6 @@ let __clearInputStateHard = () => {};
             return { x: (v.x*0.5+0.5)*size.x, y: (-v.y*0.5+0.5)*size.y };
           }
 
-          let logged = false;
           function guardTick(){
             const dt = performance.now() - t0;
             const scr = worldTopToScreen();
@@ -118,14 +158,10 @@ let __clearInputStateHard = () => {};
               Math.abs(State.orbitTarget.z - target0.z) > 1e-3 ||
               Math.abs(State.radius - radius0) > 1e-3;
 
-            if ((cutTop || driftTarget) && !logged) {
-              logged = true;
+            if (cutTop || driftTarget) {
               console.warn('[DOGE:guard] reajustando fit (cutTop/drift detectado)', {
                 cutTop, driftTarget, scr, orbitTarget: {...State.orbitTarget}, radius: State.radius
               });
-            }
-
-            if (cutTop || driftTarget) {
               // reaplica o mesmo fit “Home” para estabilizar
               syncOrbitTargetToModel({ saveAsHome: false, animate: false });
               resetRotation();
@@ -163,44 +199,52 @@ let __clearInputStateHard = () => {};
     // Input
     wireUnifiedInput();
 
-    // ========== Integração com Modal: mantém canvas vivo após Cancelar ==========
-    (function guardModalIntegration(){
+    // ======= LOG: diagnóstico ao cancelar/fechar modal (sem alterar estado) =======
+    (function wireModalDiagnostics(){
       const backdrop = document.getElementById('doge-modal-backdrop');
+      const cancelBtn = document.getElementById('doge-modal-close');
 
-      // 1) Se o modal.js disparar eventos, escute:
-      window.addEventListener('doge:modal:open', () => {
-        enableCanvasPointerEvents(false);
-      });
-      window.addEventListener('doge:modal:close', () => {
-        enableCanvasPointerEvents(true);
-        __clearInputStateHard?.();
-      });
-
-      // 2) Fallback: observar atributo aria-hidden do backdrop
-      if (backdrop) {
-        const mo = new MutationObserver(() => {
-          const hidden = backdrop.getAttribute('aria-hidden');
-          if (hidden === 'false') {
-            // modal aberto
-            enableCanvasPointerEvents(false);
-          } else {
-            // modal fechado (inclusive Cancelar)
-            enableCanvasPointerEvents(true);
-            __clearInputStateHard?.();
-          }
-        });
-        mo.observe(backdrop, { attributes: true, attributeFilter: ['aria-hidden'] });
+      // Log em clique do botão Cancelar (fase de captura, antes de handlers do modal)
+      if (cancelBtn){
+        cancelBtn.addEventListener('click', (e)=>{
+          snap('modal:cancel:click(capture)', { target: '#doge-modal-close' });
+          setTimeout(()=>snap('modal:cancel:+16ms'), 16);
+          requestAnimationFrame(()=>snap('modal:cancel:rAF'));
+          setTimeout(()=>snap('modal:cancel:+250ms'), 250);
+          setTimeout(()=>snap('modal:cancel:+1000ms'), 1000);
+        }, true);
       }
 
-      // 3) Fallback extra: ao pressionar ESC global (fecha modal), reabilitar
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-          setTimeout(() => {
-            enableCanvasPointerEvents(true);
-            __clearInputStateHard?.();
-          }, 0);
+      // Log em clique no backdrop (fechar ao clicar fora)
+      if (backdrop){
+        backdrop.addEventListener('click', (e)=>{
+          if (e.target === backdrop){
+            snap('modal:backdrop:click(capture)', { target: '#doge-modal-backdrop' });
+            setTimeout(()=>snap('modal:backdrop:+16ms'), 16);
+            requestAnimationFrame(()=>snap('modal:backdrop:rAF'));
+            setTimeout(()=>snap('modal:backdrop:+250ms'), 250);
+            setTimeout(()=>snap('modal:backdrop:+1000ms'), 1000);
+          }
+        }, true);
+
+        // MutationObserver só para logar transições de aria-hidden
+        const mo = new MutationObserver(()=>{
+          const hidden = backdrop.getAttribute('aria-hidden');
+          const hasShow = backdrop.classList.contains('show');
+          snap('modal:backdrop:mut', { ariaHidden: hidden, hasShow });
+        });
+        mo.observe(backdrop, { attributes: true, attributeFilter: ['aria-hidden', 'class'] });
+      }
+
+      // ESC (caso feche por teclado)
+      window.addEventListener('keydown', (e)=>{
+        if (e.key === 'Escape'){
+          snap('modal:esc:keydown');
+          setTimeout(()=>snap('modal:esc:+16ms'), 16);
+          requestAnimationFrame(()=>snap('modal:esc:rAF'));
+          setTimeout(()=>snap('modal:esc:+250ms'), 250);
         }
-      }, { passive: true });
+      }, true);
     })();
 
   } catch (err){
@@ -280,10 +324,12 @@ function wireUnifiedInput(){
   cvs.addEventListener('gesturestart',  (e) => {
     _gPrevScale = (typeof e.scale === 'number' && e.scale > 0) ? e.scale : 1;
     _gPrevRotationDeg = (typeof e.rotation === 'number') ? e.rotation : 0;
+    (window.DOGE.__inputDbg.cntGesture)++; // log
     e.preventDefault();
   }, { passive:false });
 
   cvs.addEventListener('gesturechange', (e) => {
+    (window.DOGE.__inputDbg.cntGesture)++; // log
     // Pinch (zoom)
     if (typeof e.scale === 'number' && e.scale > 0) {
       let factor = e.scale / (_gPrevScale || 1);
@@ -304,6 +350,7 @@ function wireUnifiedInput(){
   }, { passive:false });
 
   cvs.addEventListener('gestureend',    (e) => {
+    (window.DOGE.__inputDbg.cntGesture)++; // log
     _gPrevScale = 1;
     _gPrevRotationDeg = 0;
     e.preventDefault();
@@ -350,6 +397,13 @@ function wireUnifiedInput(){
 
   const TWIST_SENS_MOUSE = 0.012; // sensibilidade do twist no botão direito
 
+  // ====== DEBUG: estado de input exposto para snapshots ======
+  window.DOGE.__inputDbg = {
+    pointers,
+    captures: new Set(),
+    cntDown: 0, cntUp: 0, cntLost: 0, cntWheel: 0, cntGesture: 0
+  };
+
   const setModeForPointer = (pe, activePointersCount) => {
     if (pe.pointerType === 'mouse') {
       // Pan temporário por duplo-clique tem prioridade para o botão esquerdo
@@ -383,7 +437,9 @@ function wireUnifiedInput(){
 
   // Pointer Down
   cvs.addEventListener('pointerdown', (e)=>{
+    window.DOGE.__inputDbg.cntDown++;
     cvs.setPointerCapture?.(e.pointerId);
+    window.DOGE.__inputDbg.captures.add(e.pointerId);
 
     pointers.set(e.pointerId, {
       x: e.clientX, y: e.clientY,
@@ -462,6 +518,8 @@ function wireUnifiedInput(){
 
   // Pointer Up/Cancel
   const clearPointer = (e)=>{
+    window.DOGE.__inputDbg.cntUp++;
+    window.DOGE.__inputDbg.captures.delete(e.pointerId);
     pointers.delete(e.pointerId);
     if (pointers.size < 2){
       pinchPrevDist = 0;
@@ -471,11 +529,16 @@ function wireUnifiedInput(){
   };
   cvs.addEventListener('pointerup', clearPointer,        { passive:true });
   cvs.addEventListener('pointercancel', clearPointer,    { passive:true });
-  cvs.addEventListener('lostpointercapture', clearPointer,{ passive:true });
+  cvs.addEventListener('lostpointercapture', (e)=>{
+    window.DOGE.__inputDbg.cntLost++;
+    window.DOGE.__inputDbg.captures.delete(e.pointerId);
+    clearPointer(e);
+  }, { passive:true });
 
   // Wheel (desktop/trackpad) = zoom
   // - Trackpad pinch (Chrome/Edge/Firefox) chega como wheel com ctrlKey=true.
   cvs.addEventListener('wheel', (e)=>{
+    window.DOGE.__inputDbg.cntWheel++;
     e.preventDefault();
 
     if (e.ctrlKey) {
@@ -498,17 +561,4 @@ function wireUnifiedInput(){
 
   // Bloqueia menu do botão direito (necessário para twist com right-drag)
   cvs.addEventListener('contextmenu', e => e.preventDefault(), { passive:false });
-
-  // ---- Reset “hard” do estado de input (após modal fechar, etc.) ----
-  __clearInputStateHard = () => {
-    pointers.clear();
-    pinchPrevDist = 0;
-    pinchPrevMid  = null;
-    pinchPrevAng  = 0;
-    panLatchUntil = 0;
-    touchPanArmedUntil = 0;
-    __spacePressed = false;
-    releaseAllPointerCapture();
-    enableCanvasPointerEvents(true);
-  };
 }
