@@ -198,40 +198,109 @@ window.addEventListener('keyup', (e) => {
 // ============================
 // Input unificado (Pointer Events)
 // PC:
-//   - Pan: botão do meio OU Space + esquerdo
+//   - Pan: botão do meio OU Space + esquerdo OU duplo-clique + arrasto (esquerdo)
 //   - Orbit (yaw/pitch): botão esquerdo
 //   - Twist (roll): botão direito
 //   - Zoom: scroll
-// Touch:
-//   - 1 dedo = orbit
-//   - 2 dedos = pinch (zoom) + pan do centro + twist (ângulo entre dedos)
+// Touch / Touchpad (notebook):
+//   - 1 dedo = orbit (double-tap arma pan temporário de 1 dedo)
+//   - 2 dedos = pinch (zoom) + pan do centro + twist (ângulo entre dedos, quando suportado)
+//   - Safari/macOS: usa gesturechange (scale/rotation); Chrome/Edge/Firefox: pinch via Ctrl+wheel
 // ============================
 function wireUnifiedInput(){
   const cvs = document.getElementById('doge-canvas') || document.querySelector('#app canvas');
   if (!cvs) return;
 
-  // Bloqueia gestos nativos (iOS)
-  cvs.addEventListener('gesturestart',  e => e.preventDefault?.(), { passive:false });
-  cvs.addEventListener('gesturechange', e => e.preventDefault?.(), { passive:false });
-  cvs.addEventListener('gestureend',    e => e.preventDefault?.(), { passive:false });
+  // ---------- Gestos "legacy" do Safari/macOS (escala/rotação expostas no DOM)
+  let _gPrevScale = 1;
+  let _gPrevRotationDeg = 0;
 
+  cvs.addEventListener('gesturestart',  (e) => {
+    _gPrevScale = (typeof e.scale === 'number' && e.scale > 0) ? e.scale : 1;
+    _gPrevRotationDeg = (typeof e.rotation === 'number') ? e.rotation : 0;
+    e.preventDefault();
+  }, { passive:false });
+
+  cvs.addEventListener('gesturechange', (e) => {
+    // Pinch (zoom)
+    if (typeof e.scale === 'number' && e.scale > 0) {
+      let factor = e.scale / (_gPrevScale || 1);
+      factor = Math.max(0.8, Math.min(1.25, factor));
+      zoomDelta({ scale: factor }, /*isPinch=*/true);
+      _gPrevScale = e.scale;
+    }
+    // Twist (rotação) — graus → rad
+    if (typeof e.rotation === 'number') {
+      const dDeg = e.rotation - _gPrevRotationDeg;
+      if (Math.abs(dDeg) > 0.05) {
+        const dRad = -(dDeg * Math.PI / 180);
+        orbitTwist(dRad);
+        _gPrevRotationDeg = e.rotation;
+      }
+    }
+    e.preventDefault();
+  }, { passive:false });
+
+  cvs.addEventListener('gestureend',    (e) => {
+    _gPrevScale = 1;
+    _gPrevRotationDeg = 0;
+    e.preventDefault();
+  }, { passive:false });
+
+  // ---------- PAN LATCH (duplo-clique / double-tap) ----------
+  let panLatchUntil = 0;          // mouse: tempo limite p/ arrasto virar pan
+  let touchPanArmedUntil = 0;     // touch: idem (após double-tap)
+  const PAN_LATCH_MS = 650;
+
+  // Mouse: duplo-clique arma pan com botão esquerdo temporariamente
+  cvs.addEventListener('dblclick', (e) => {
+    panLatchUntil = performance.now() + PAN_LATCH_MS;
+    e.preventDefault();
+  }, { passive:false });
+
+  // Touch: double-tap detection (para armar pan de 1 dedo)
+  let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
+  const DOUBLE_TAP_MS = 300;
+  const DOUBLE_TAP_MAX_D = 22; // px
+
+  cvs.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return; // apenas 1 dedo conta como tap
+    const t = performance.now();
+    const x = e.touches[0].clientX, y = e.touches[0].clientY;
+    const dt = t - lastTapTime;
+    const dx = x - lastTapX, dy = y - lastTapY;
+    if (dt < DOUBLE_TAP_MS && Math.hypot(dx, dy) < DOUBLE_TAP_MAX_D) {
+      // Double-tap: arma pan de 1 dedo por curto período
+      touchPanArmedUntil = t + PAN_LATCH_MS;
+      e.preventDefault();
+    }
+    lastTapTime = t; lastTapX = x; lastTapY = y;
+  }, { passive:false });
+
+  const isPanLatchActive = () => performance.now() < panLatchUntil;
+  const isTouchPanArmed = () => performance.now() < touchPanArmedUntil;
+
+  // ---------- Pointer Events unificados (mouse/touch)
   const pointers = new Map(); // id -> {x,y,button,ptype,mode}
   let pinchPrevDist = 0;
   let pinchPrevMid  = null;
   let pinchPrevAng  = 0; // ângulo entre dedos no frame anterior
 
-  // sensibilidade do twist com botão direito (mouse)
-  const TWIST_SENS_MOUSE = 0.012; // ajuste aqui se quiser mais/menos sensível
+  const TWIST_SENS_MOUSE = 0.012; // sensibilidade do twist no botão direito
 
-  const setModeForPointer = (pe) => {
+  const setModeForPointer = (pe, activePointersCount) => {
     if (pe.pointerType === 'mouse') {
-      if (pe.button === 1) return 'pan';                 // botão do meio
-      if (pe.button === 2) return 'twist';               // botão direito
+      // Pan temporário por duplo-clique tem prioridade para o botão esquerdo
+      if (pe.button === 0 && isPanLatchActive()) return 'pan';
+      if (pe.button === 1) return 'pan';                   // botão do meio
+      if (pe.button === 2) return 'twist';                 // botão direito
       if (pe.button === 0 && __spacePressed) return 'pan'; // Space + esquerdo
-      return 'orbit';                                    // esquerdo
+      return 'orbit';                                      // esquerdo
     }
-    // touch 1 dedo = orbit
-    return 'orbit';
+    // Touch:
+    if (activePointersCount >= 2) return 'gesture2';       // 2 dedos = bloco de gesto
+    if (isTouchPanArmed()) return 'pan';                   // 1 dedo armado por double-tap
+    return 'orbit';                                        // padrão 1 dedo
   };
 
   const arrPts = () => [...pointers.values()];
@@ -253,11 +322,13 @@ function wireUnifiedInput(){
   // Pointer Down
   cvs.addEventListener('pointerdown', (e)=>{
     cvs.setPointerCapture?.(e.pointerId);
+
     pointers.set(e.pointerId, {
       x: e.clientX, y: e.clientY,
       button: e.button, ptype: e.pointerType,
-      mode: setModeForPointer(e)
+      mode: setModeForPointer(e, pointers.size + 1)
     });
+
     if (pointers.size === 2){
       pinchPrevDist = getDistance();
       pinchPrevMid  = getMidpoint();
@@ -274,7 +345,9 @@ function wireUnifiedInput(){
     const px = p.x, py = p.y;
     p.x = e.clientX; p.y = e.clientY;
 
-    if (pointers.size === 1){
+    const count = pointers.size;
+
+    if (count === 1){
       const dx = p.x - px, dy = p.y - py;
 
       switch (p.mode) {
@@ -282,15 +355,14 @@ function wireUnifiedInput(){
           panDelta(dx, dy);
           break;
         case 'twist':
-          // botão direito: roll em torno do eixo de visão
-          // segue o movimento horizontal (troque o sinal se preferir o inverso)
+          // botão direito (mouse): roll em torno do eixo de visão
           orbitTwist(dx * TWIST_SENS_MOUSE);
           break;
         default: // 'orbit'
           orbitDelta(dx, dy, p.ptype !== 'mouse'); // yaw/pitch (sem roll)
       }
 
-    } else if (pointers.size === 2){
+    } else if (count === 2){
       // === PINCH (zoom) ===
       const dist = getDistance();
       if (pinchPrevDist > 0 && dist > 0){
@@ -317,9 +389,8 @@ function wireUnifiedInput(){
       if (dAng >  Math.PI) dAng -= 2*Math.PI;
       if (dAng < -Math.PI) dAng += 2*Math.PI;
 
-      // Se preferir o sentido oposto no seu device, troque para orbitTwist(-dAng)
       if (Math.abs(dAng) > 1e-4) {
-        orbitTwist(-dAng);
+        orbitTwist(-dAng); // troque o sinal se preferir o oposto no seu device
       }
       pinchPrevAng = ang;
     }
@@ -341,8 +412,21 @@ function wireUnifiedInput(){
   cvs.addEventListener('lostpointercapture', clearPointer,{ passive:true });
 
   // Wheel (desktop/trackpad) = zoom
+  // - Trackpad pinch (Chrome/Edge/Firefox) chega como wheel com ctrlKey=true.
   cvs.addEventListener('wheel', (e)=>{
     e.preventDefault();
+
+    if (e.ctrlKey) {
+      // Fallback para pinch do trackpad (Ctrl+wheel)
+      const unit = (e.deltaMode === 1) ? 33 : (e.deltaMode === 2) ? 120 : 1;
+      const dy   = e.deltaY * unit;
+      let scale = Math.exp((-dy) * 0.0012);
+      scale = Math.max(0.8, Math.min(1.25, scale));
+      zoomDelta({ scale }, /*isPinch=*/true);
+      return;
+    }
+
+    // Scroll normal → zoom por roda (mouse)
     const unit = (e.deltaMode === 1) ? 33 : (e.deltaMode === 2) ? 120 : 1;
     const dy   = e.deltaY * unit;
     let scale = Math.exp(dy * 0.0011);
