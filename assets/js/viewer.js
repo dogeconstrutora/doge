@@ -1,5 +1,5 @@
 // ============================
-// Entry do Viewer DOGE
+// Entry do Viewer DOGE (FINAL)
 // ============================
 
 import { initTooltip } from './utils.js';
@@ -9,122 +9,99 @@ import {
   initScene,
   applyOrbitToCamera,
   render,
-  camera,
   orbitDelta,
   panDelta,
   zoomDelta,
-  recenterCamera,
-  INITIAL_THETA,
-  INITIAL_PHI
+  resetRotation,
+  syncOrbitTargetToModel,
+  orbitTwist,           // roll (twist)
+  disableAutoFit        // desativa auto-fit interno do scene
 } from './scene.js';
 import {
   buildFromLayout,
   getTorre,
   apply2DVisual
 } from './geometry.js';
-import { initOverlay2D, render2DCards, hide2D } from './overlay2d.js';
+import { initOverlay2D, render2DCards, hide2D, show2D } from './overlay2d.js';
 import { initPicking, selectGroup } from './picking.js';
 import { initModal } from './modal.js';
 import { initHUD, applyFVSAndRefresh } from './hud.js';
-
 
 // ============================
 // Boot
 // ============================
 (async function boot(){
-  // UI base
-  initTooltip();
-  initModal();
+  try {
+    initTooltip();
+    initModal();
 
-  // Loading on
-  const loading = document.getElementById('doge-loading');
-  loading?.classList.remove('hidden');
+    const loading = document.getElementById('doge-loading');
+    loading?.classList.remove('hidden');
 
-  // 1) Carrega dados
-  await loadAllData();
+    // 1) Dados
+    await loadAllData();
 
-  // 2) Cena / câmera / renderer
-  initScene();
+    // 2) Cena
+    initScene();
 
-  // 3) Monta a torre
-const { bbox } = buildFromLayout(layoutData || { meta:{}, placements:[] });
+    // 2.1) Desliga qualquer auto-fit interno do scene (evita “coice”)
+    disableAutoFit?.();
 
+    // 3) Montagem do modelo
+    buildFromLayout(layoutData || { meta: {}, placements: [] });
 
-// ...
+    // 4) Primeiro render
+    render();
 
-// No final do boot(), depois do primeiro render():
-render();
-
-// === Fit inicial adiado (garante viewport/HUD estabilizados) ===
-(function fitInitialView(){
-  // 1º frame: deixa layout/CSS assentarem
-  requestAnimationFrame(()=>{
-    // força um recálculo de aspect se algo mudou
-    window.dispatchEvent(new Event('resize'));
-
-    // 2º frame: faz o fit-to-bbox já com aspect correto
-    requestAnimationFrame(()=>{
-      recenterCamera({
-        // sem bbox: ele computa a BBox atual da torre
-        theta: INITIAL_THETA,    // 90° anti-horário (a “frente” que você pediu)
-        phi:   INITIAL_PHI,      // inclinação padrão (~63°)
-        margin: 1.20,            // pode ajustar se quiser mais “respiro”
-        animate: false
+    // 5) Fit inicial = mesma Home do Reset (sem corte no topo)
+    (function fitInitialView(){
+      requestAnimationFrame(()=>{
+        // garante aspect/viewport estáveis após CSS
+        window.dispatchEvent(new Event('resize'));
+        requestAnimationFrame(()=>{
+          // define alvo baseado no modelo e salva como Home
+          syncOrbitTargetToModel({ saveAsHome: true, animate: false });
+          // põe “em pé” e aplica órbita
+          resetRotation();
+          render();
+        });
       });
-      render();
-    });
-  });
+    })();
+
+    // 6) HUD e FVS
+    initHUD();
+    applyFVSAndRefresh();
+
+    // 7) Overlay 2D
+    initOverlay2D();
+    render2DCards();
+
+    // 8) Picking
+    initPicking();
+
+    // 9) Loading off + render
+    loading?.classList.add('hidden');
+    render();
+
+    // 10) Resize: re-aplica órbita (sem refazer fit)
+    let lastW = window.innerWidth, lastH = window.innerHeight;
+    window.addEventListener('resize', () => {
+      if (window.innerWidth !== lastW || window.innerHeight !== lastH) {
+        lastW = window.innerWidth; lastH = window.innerHeight;
+        applyOrbitToCamera();
+        render();
+      }
+    }, { passive: true });
+
+    // 11) Input
+    wireUnifiedInput();
+  } catch (err){
+    console.error('[viewer] erro no boot:', err);
+  }
 })();
 
-
-// Enquadra 100% e coloca “de frente”
-recenterCamera({ bbox, theta: INITIAL_THETA, phi: INITIAL_PHI, animate: false, margin: 1.18 });
-
-  // 4) Ajuste inicial — mesmo enquadramento usado no recenter
-  if (bbox && bbox.isBox3){
-    recenterCamera({ bbox, verticalOffsetRatio: 0.12 });
-  } else {
-    applyOrbitToCamera();
-  }
-
-  // 5) HUD (dropdowns, botões, sliders)
-  initHUD();
-
-  // 6) Aplica FVS/NC — injeta resolvers e COLOR_MAP
-  applyFVSAndRefresh();
-
-  // 7) Overlay 2D (render já com resolvers prontos)
-  initOverlay2D();
-  render2DCards();
-
-  // 8) Picking (hover + click) no 3D
-  initPicking();
-
-  // 9) Loading off
-  loading?.classList.add('hidden');
-
-  // 10) Render inicial
-  render();
-
-  // 11) Reaplica o offset vertical no resize mantendo enquadramento
-  window.addEventListener('resize', ()=> {
-    const torre = getTorre();
-    if (!torre) return;
-    const bb = new THREE.Box3().setFromObject(torre);
-    if (!bb || !bb.isBox3) return;
-    recenterCamera({ bbox: bb, verticalOffsetRatio: 0.12 });
-  }, { passive:true });
-
-  // 12) Input unificado (mouse + touch) – suave no mobile
-  wireUnifiedInput();
-})().catch(err=>{
-  console.error('[viewer] erro no boot:', err);
-});
-
-
 // ============================
-// Selecionar também o grupo 3D ao clicar num card 2D
-// (o overlay já abre o modal; aqui apenas sincronizamos a seleção 3D)
+// Seleção 3D a partir do 2D
 // ============================
 (function wireSelect3DFrom2D(){
   const host = document.getElementById('cards2d');
@@ -146,73 +123,100 @@ recenterCamera({ bbox, theta: INITIAL_THETA, phi: INITIAL_PHI, animate: false, m
 })();
 
 // ============================
+// ESC fecha 2D se ativo (sem modal)
+// ============================
+window.addEventListener('keydown', (e)=>{
+  if (e.key !== 'Escape') return;
+  const backdrop = document.getElementById('doge-modal-backdrop');
+  const modalOpen = backdrop && backdrop.getAttribute('aria-hidden') === 'false';
+  if (modalOpen) return;
+  if (State.flatten2D >= 0.95){
+    State.flatten2D = 0;
+    hide2D();
+    apply2DVisual(false);
+    render();
+  }
+}, { passive:true });
+
+// ============================
+// Tracking da tecla Space (Space + esquerdo = Pan)
+// ============================
+let __spacePressed = false;
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { __spacePressed = true; e.preventDefault(); }
+}, { passive:false });
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'Space') __spacePressed = false;
+}, { passive:true });
+
+// ============================
 // Input unificado (Pointer Events)
-// - 1 ponteiro:
-//     * mouse esquerdo  -> ORBIT
-//     * mouse direito   -> PAN
-//     * touch           -> ORBIT
-// - 2 ponteiros (touch): PINCH para zoom + PAN pelo movimento do centro
-// - Wheel: zoom
+// PC:
+//   - Pan: botão do meio OU Space + botão esquerdo
+//   - Orbit (yaw/pitch): botão esquerdo
+//   - Twist (roll): botão direito
+//   - Zoom: scroll da rodinha
+// Touch:
+//   - 1 dedo = orbit
+//   - 2 dedos = pinch (zoom) + pan do centro + twist (ângulo entre dedos)
 // ============================
 function wireUnifiedInput(){
   const cvs = document.getElementById('doge-canvas') || document.querySelector('#app canvas');
   if (!cvs) return;
 
-  // Importantíssimo: já definimos touch-action: none no scene.js
-  // Aqui só garantimos que não há seleção/zoom do navegador
-  cvs.addEventListener('gesturestart', e => e.preventDefault?.(), { passive:false });
+  // Bloqueia gestos nativos (iOS)
+  cvs.addEventListener('gesturestart',  e => e.preventDefault?.(), { passive:false });
   cvs.addEventListener('gesturechange', e => e.preventDefault?.(), { passive:false });
-  cvs.addEventListener('gestureend', e => e.preventDefault?.(), { passive:false });
+  cvs.addEventListener('gestureend',    e => e.preventDefault?.(), { passive:false });
 
-  // Estado de ponteiros
   const pointers = new Map(); // id -> {x,y,button,ptype,mode}
   let pinchPrevDist = 0;
   let pinchPrevMid  = null;
+  let pinchPrevAng  = 0; // ângulo entre dedos no frame anterior
+
+  // sensibilidade do twist com botão direito (mouse)
+  const TWIST_SENS_MOUSE = 0.012; // ajuste se quiser mais/menos sensível
 
   const setModeForPointer = (pe) => {
-    // mouse: button 2 = pan; caso contrário orbit
-    if (pe.pointerType === 'mouse'){
-      return (pe.button === 2) ? 'pan' : 'orbit';
+    if (pe.pointerType === 'mouse') {
+      if (pe.button === 1) return 'pan';                   // botão do meio
+      if (pe.button === 2) return 'twist';                 // botão direito
+      if (pe.button === 0 && __spacePressed) return 'pan'; // Space + esquerdo
+      return 'orbit';                                      // esquerdo
     }
-    // touch: 1 dedo -> orbit (pan fica para gesto de 2 dedos)
+    // touch 1 dedo = orbit
     return 'orbit';
   };
 
+  const arrPts = () => [...pointers.values()];
   const getMidpoint = () => {
-    const arr = [...pointers.values()];
-    if (arr.length < 2) return null;
-    return {
-      x: (arr[0].x + arr[1].x) * 0.5,
-      y: (arr[0].y + arr[1].y) * 0.5
-    };
+    const a = arrPts(); if (a.length < 2) return null;
+    return { x:(a[0].x+a[1].x)*0.5, y:(a[0].y+a[1].y)*0.5 };
   };
   const getDistance = () => {
-    const arr = [...pointers.values()];
-    if (arr.length < 2) return 0;
-    const dx = arr[0].x - arr[1].x;
-    const dy = arr[0].y - arr[1].y;
-    return Math.hypot(dx, dy);
+    const a = arrPts(); if (a.length < 2) return 0;
+    return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+  };
+  const getAngle = () => {
+    const a = arrPts(); if (a.length < 2) return 0;
+    const dx = a[1].x - a[0].x;
+    const dy = a[1].y - a[0].y;
+    return Math.atan2(dy, dx); // rad
   };
 
   // Pointer Down
   cvs.addEventListener('pointerdown', (e)=>{
-    // Captura o ponteiro para evitar "pulos" ao sair da área
     cvs.setPointerCapture?.(e.pointerId);
-
     pointers.set(e.pointerId, {
       x: e.clientX, y: e.clientY,
-      button: e.button,
-      ptype: e.pointerType,
+      button: e.button, ptype: e.pointerType,
       mode: setModeForPointer(e)
     });
-
-    // Se virou pinch (2 dedos), inicializa estado
     if (pointers.size === 2){
       pinchPrevDist = getDistance();
       pinchPrevMid  = getMidpoint();
+      pinchPrevAng  = getAngle();
     }
-
-    // Evita texto/scroll do navegador
     e.preventDefault();
   }, { passive:false });
 
@@ -221,42 +225,55 @@ function wireUnifiedInput(){
     if (!pointers.has(e.pointerId)) return;
 
     const p = pointers.get(e.pointerId);
-    const prevX = p.x, prevY = p.y;
+    const px = p.x, py = p.y;
     p.x = e.clientX; p.y = e.clientY;
 
     if (pointers.size === 1){
-      // 1 ponteiro: ORBIT ou PAN
-      const dx = p.x - prevX;
-      const dy = p.y - prevY;
+      const dx = p.x - px, dy = p.y - py;
 
-      if (p.mode === 'pan'){
-        panDelta(dx, dy);
-      } else {
-        // ORBIT – usa sensibilidade mobile igual à do 2D
-        orbitDelta(dx, dy, p.ptype !== 'mouse');
+      switch (p.mode) {
+        case 'pan':
+          panDelta(dx, dy);
+          break;
+        case 'twist':
+          // botão direito: roll em torno do eixo de visão (segue o horizontal)
+          orbitTwist(dx * TWIST_SENS_MOUSE);
+          break;
+        default: // 'orbit'
+          orbitDelta(dx, dy, p.ptype !== 'mouse'); // yaw/pitch (sem roll)
       }
+
     } else if (pointers.size === 2){
-      // 2 ponteiros: PINCH + PAN pelo centro
+      // === PINCH (zoom) ===
       const dist = getDistance();
-      const mid  = getMidpoint();
-
-      if (pinchPrevDist > 0){
-        const dScale = dist - pinchPrevDist;
-        if (Math.abs(dScale) > 0.5){
-          // aproximação suave: sinal do delta
-          zoomDelta(-Math.sign(dScale)); // gesto padrão: afastar dedos -> zoom out
-        }
+      if (pinchPrevDist > 0 && dist > 0){
+        let scale = dist / pinchPrevDist;
+        const exponent = 0.85;
+        scale = Math.pow(scale, exponent);
+        scale = Math.max(0.8, Math.min(1.25, scale));
+        zoomDelta({ scale }, true);
       }
-      if (pinchPrevMid){
+      pinchPrevDist = dist;
+
+      // === PAN do centro ===
+      const mid  = getMidpoint();
+      if (pinchPrevMid && mid){
         const mdx = mid.x - pinchPrevMid.x;
         const mdy = mid.y - pinchPrevMid.y;
-        if (Math.abs(mdx) > 0 || Math.abs(mdy) > 0){
-          panDelta(mdx, mdy);
-        }
+        if (mdx || mdy) panDelta(mdx, mdy);
       }
-
-      pinchPrevDist = dist;
       pinchPrevMid  = mid;
+
+      // === TWIST (roll) — rotação de dois dedos ===
+      const ang = getAngle();
+      let dAng = ang - pinchPrevAng;
+      if (dAng >  Math.PI) dAng -= 2*Math.PI;
+      if (dAng < -Math.PI) dAng += 2*Math.PI;
+      if (Math.abs(dAng) > 1e-4) {
+        // troque para orbitTwist(+dAng) se preferir sentido oposto no seu device
+        orbitTwist(-dAng);
+      }
+      pinchPrevAng = ang;
     }
 
     e.preventDefault();
@@ -268,34 +285,23 @@ function wireUnifiedInput(){
     if (pointers.size < 2){
       pinchPrevDist = 0;
       pinchPrevMid  = null;
+      pinchPrevAng  = 0;
     }
   };
-  cvs.addEventListener('pointerup', clearPointer, { passive:true });
-  cvs.addEventListener('pointercancel', clearPointer, { passive:true });
-  cvs.addEventListener('lostpointercapture', clearPointer, { passive:true });
+  cvs.addEventListener('pointerup', clearPointer,        { passive:true });
+  cvs.addEventListener('pointercancel', clearPointer,    { passive:true });
+  cvs.addEventListener('lostpointercapture', clearPointer,{ passive:true });
 
-  // Wheel (desktop)
+  // Wheel = zoom
   cvs.addEventListener('wheel', (e)=>{
     e.preventDefault();
-    const sign = Math.sign(e.deltaY);
-    zoomDelta(sign);
+    const unit = (e.deltaMode === 1) ? 33 : (e.deltaMode === 2) ? 120 : 1;
+    const dy   = e.deltaY * unit;
+    let scale = Math.exp(dy * 0.0011);
+    scale = Math.max(0.8, Math.min(1.25, scale));
+    zoomDelta({ scale }, /*isPinch=*/false);
   }, { passive:false });
 
-  // Botão direito = pan (somente mouse)
+  // Bloqueia menu do botão direito (necessário p/ twist com right-drag)
   cvs.addEventListener('contextmenu', e => e.preventDefault(), { passive:false });
 }
-
-// ============================
-// ESC fecha 2D se ativo (quando o modal não está aberto)
-// ============================
-window.addEventListener('keydown', (e)=>{
-  if (e.key !== 'Escape') return;
-
-  // Se o modal estiver aberto, deixamos o handler do modal agir.
-  const modalBackdrop = document.getElementById('doge-modal-backdrop');
-  const modalOpen = modalBackdrop && modalBackdrop.classList.contains('show');
-  if (modalOpen) return;
-
-  // Se 2D estiver ativo, desliga
-
-});
