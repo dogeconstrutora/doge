@@ -1,5 +1,5 @@
 // ============================
-// Entry do Viewer DOGE (FINAL)
+// Entry do Viewer DOGE
 // ============================
 
 import { initTooltip } from './utils.js';
@@ -14,8 +14,11 @@ import {
   zoomDelta,
   resetRotation,
   syncOrbitTargetToModel,
-  orbitTwist,           // roll (twist)
-  disableAutoFit        // desativa auto-fit interno do scene
+  orbitTwist,           // roll por gesto de torção (twist)
+  camera,
+  scene,
+  renderer,
+  disableAutoFit        // <<< desativa auto-fit interno do scene
 } from './scene.js';
 import {
   buildFromLayout,
@@ -38,52 +41,95 @@ import { initHUD, applyFVSAndRefresh } from './hud.js';
     const loading = document.getElementById('doge-loading');
     loading?.classList.remove('hidden');
 
-    // 1) Dados
     await loadAllData();
 
-    // 2) Cena
     initScene();
 
-    // 2.1) Desliga qualquer auto-fit interno do scene (evita “coice”)
+    // IMPORTANTE: desliga qualquer auto-fit interno que o scene faça (timer)
     disableAutoFit?.();
 
-    // 3) Montagem do modelo
     buildFromLayout(layoutData || { meta: {}, placements: [] });
 
-    // 4) Primeiro render
     render();
 
-    // 5) Fit inicial = mesma Home do Reset (sem corte no topo)
+    // Fit inicial "guardado" (mesma Home do Reset), evitando corte/drift
     (function fitInitialView(){
       requestAnimationFrame(()=>{
-        // garante aspect/viewport estáveis após CSS
+        // garante aspect correto após CSS/layout
         window.dispatchEvent(new Event('resize'));
+
         requestAnimationFrame(()=>{
-          // define alvo baseado no modelo e salva como Home
+          // Faz UM único fit e salva como Home
           syncOrbitTargetToModel({ saveAsHome: true, animate: false });
-          // põe “em pé” e aplica órbita
-          resetRotation();
+          resetRotation(); // deixa "em pé"
           render();
+
+          // --- Watchdog 1.2s: se cortar topo ou o alvo/raio mudar, refaz fit ---
+          const T_GUARD = 1200;
+          const t0 = performance.now();
+          const target0 = State.orbitTarget.clone();
+          const radius0 = State.radius;
+
+          function worldTopToScreen() {
+            const torre = getTorre?.();
+            const root = torre || scene;
+            if (!root) return null;
+            const bb = new THREE.Box3().setFromObject(root);
+            if (!bb) return null;
+            const topCenter = new THREE.Vector3(
+              (bb.min.x + bb.max.x) * 0.5,
+              bb.max.y,
+              (bb.min.z + bb.max.z) * 0.5
+            );
+            const v = topCenter.clone().project(camera);
+            const size = renderer.getSize(new THREE.Vector2());
+            return { x: (v.x*0.5+0.5)*size.x, y: (-v.y*0.5+0.5)*size.y };
+          }
+
+          let logged = false;
+          function guardTick(){
+            const dt = performance.now() - t0;
+            const scr = worldTopToScreen();
+            const cutTop = scr && scr.y < 0;
+            const driftTarget =
+              Math.abs(State.orbitTarget.x - target0.x) > 1e-3 ||
+              Math.abs(State.orbitTarget.y - target0.y) > 1e-3 ||
+              Math.abs(State.orbitTarget.z - target0.z) > 1e-3 ||
+              Math.abs(State.radius - radius0) > 1e-3;
+
+            if ((cutTop || driftTarget) && !logged) {
+              logged = true;
+              console.warn('[DOGE:guard] reajustando fit (cutTop/drift detectado)', {
+                cutTop, driftTarget, scr, orbitTarget: {...State.orbitTarget}, radius: State.radius
+              });
+            }
+
+            if (cutTop || driftTarget) {
+              // reaplica o mesmo fit “Home” para estabilizar
+              syncOrbitTargetToModel({ saveAsHome: false, animate: false });
+              resetRotation();
+              render();
+            }
+
+            if (dt < T_GUARD) requestAnimationFrame(guardTick);
+          }
+          requestAnimationFrame(guardTick);
         });
       });
     })();
 
-    // 6) HUD e FVS
     initHUD();
     applyFVSAndRefresh();
 
-    // 7) Overlay 2D
     initOverlay2D();
     render2DCards();
 
-    // 8) Picking
     initPicking();
 
-    // 9) Loading off + render
     loading?.classList.add('hidden');
     render();
 
-    // 10) Resize: re-aplica órbita (sem refazer fit)
+    // Resize: não refaça fit; só reaplique órbita
     let lastW = window.innerWidth, lastH = window.innerHeight;
     window.addEventListener('resize', () => {
       if (window.innerWidth !== lastW || window.innerHeight !== lastH) {
@@ -93,7 +139,7 @@ import { initHUD, applyFVSAndRefresh } from './hud.js';
       }
     }, { passive: true });
 
-    // 11) Input
+    // Input
     wireUnifiedInput();
   } catch (err){
     console.error('[viewer] erro no boot:', err);
@@ -152,10 +198,10 @@ window.addEventListener('keyup', (e) => {
 // ============================
 // Input unificado (Pointer Events)
 // PC:
-//   - Pan: botão do meio OU Space + botão esquerdo
+//   - Pan: botão do meio OU Space + esquerdo
 //   - Orbit (yaw/pitch): botão esquerdo
 //   - Twist (roll): botão direito
-//   - Zoom: scroll da rodinha
+//   - Zoom: scroll
 // Touch:
 //   - 1 dedo = orbit
 //   - 2 dedos = pinch (zoom) + pan do centro + twist (ângulo entre dedos)
@@ -175,14 +221,14 @@ function wireUnifiedInput(){
   let pinchPrevAng  = 0; // ângulo entre dedos no frame anterior
 
   // sensibilidade do twist com botão direito (mouse)
-  const TWIST_SENS_MOUSE = 0.012; // ajuste se quiser mais/menos sensível
+  const TWIST_SENS_MOUSE = 0.012; // ajuste aqui se quiser mais/menos sensível
 
   const setModeForPointer = (pe) => {
     if (pe.pointerType === 'mouse') {
-      if (pe.button === 1) return 'pan';                   // botão do meio
-      if (pe.button === 2) return 'twist';                 // botão direito
+      if (pe.button === 1) return 'pan';                 // botão do meio
+      if (pe.button === 2) return 'twist';               // botão direito
       if (pe.button === 0 && __spacePressed) return 'pan'; // Space + esquerdo
-      return 'orbit';                                      // esquerdo
+      return 'orbit';                                    // esquerdo
     }
     // touch 1 dedo = orbit
     return 'orbit';
@@ -236,7 +282,8 @@ function wireUnifiedInput(){
           panDelta(dx, dy);
           break;
         case 'twist':
-          // botão direito: roll em torno do eixo de visão (segue o horizontal)
+          // botão direito: roll em torno do eixo de visão
+          // segue o movimento horizontal (troque o sinal se preferir o inverso)
           orbitTwist(dx * TWIST_SENS_MOUSE);
           break;
         default: // 'orbit'
@@ -269,8 +316,9 @@ function wireUnifiedInput(){
       let dAng = ang - pinchPrevAng;
       if (dAng >  Math.PI) dAng -= 2*Math.PI;
       if (dAng < -Math.PI) dAng += 2*Math.PI;
+
+      // Se preferir o sentido oposto no seu device, troque para orbitTwist(-dAng)
       if (Math.abs(dAng) > 1e-4) {
-        // troque para orbitTwist(+dAng) se preferir sentido oposto no seu device
         orbitTwist(-dAng);
       }
       pinchPrevAng = ang;
@@ -292,7 +340,7 @@ function wireUnifiedInput(){
   cvs.addEventListener('pointercancel', clearPointer,    { passive:true });
   cvs.addEventListener('lostpointercapture', clearPointer,{ passive:true });
 
-  // Wheel = zoom
+  // Wheel (desktop/trackpad) = zoom
   cvs.addEventListener('wheel', (e)=>{
     e.preventDefault();
     const unit = (e.deltaMode === 1) ? 33 : (e.deltaMode === 2) ? 120 : 1;
@@ -302,6 +350,6 @@ function wireUnifiedInput(){
     zoomDelta({ scale }, /*isPinch=*/false);
   }, { passive:false });
 
-  // Bloqueia menu do botão direito (necessário p/ twist com right-drag)
+  // Bloqueia menu do botão direito (necessário para twist com right-drag)
   cvs.addEventListener('contextmenu', e => e.preventDefault(), { passive:false });
 }

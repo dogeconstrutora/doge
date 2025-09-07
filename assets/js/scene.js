@@ -70,12 +70,6 @@ function ensureOrbitTargetVec3() {
   return State.orbitTarget;
 }
 
-// ======= Toggle para gestos touch internos (desligados por padrão) =======
-let _useInternalTouchGestures = false;
-export function enableInternalTouchGestures(flag = true) {
-  _useInternalTouchGestures = !!flag;
-}
-
 export function initScene() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0f141b);
@@ -119,11 +113,7 @@ export function initScene() {
 
   applyOrbitToCamera();
 
-  // Gestos touch internos: SÓ se habilitados
-  if (_useInternalTouchGestures) {
-    setupUnifiedTouchGestureHandler(cvs);
-  }
-
+  setupUnifiedTouchGestureHandler(cvs);
   startAutoFitOnce(); // calcula pivô fixo + Home (não roda se Home já existir)
 
   return { scene, renderer, camera };
@@ -479,7 +469,7 @@ export function orbitDelta(dx, dy, isTouch = false) {
   render();
 }
 
-// ========== TWIST (2 dedos / right-drag): roll no eixo de visão ==========
+// ========== TWIST (2 dedos): roll em torno do eixo de visão ==========
 export function orbitTwist(deltaAngleRad) {
   if (!Number.isFinite(deltaAngleRad) || Math.abs(deltaAngleRad) < 1e-6) return;
 
@@ -583,7 +573,7 @@ export function zoomDelta(deltaOrObj = 0, isPinch = false) {
   _zoomAnim = requestAnimationFrame(stepZoom);
 }
 
-// ========== TOQUE UNIFICADO (interno, opcional) ==========
+// ========== TOQUE UNIFICADO ==========
 function setupUnifiedTouchGestureHandler(canvas) {
   let lastTouches = null;
 

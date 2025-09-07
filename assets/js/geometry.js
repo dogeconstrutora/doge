@@ -677,3 +677,4 @@ export function setGroupHighlight(group, mode = 'none', THREERef) {
     m.needsUpdate = true;
   }
 }
+
