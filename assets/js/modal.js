@@ -69,6 +69,7 @@ export function initModal(){
 // ---------------
 // API pública
 // ---------------
+
 /**
  * Abre o modal de apartamento (estilo viewer.html)
  * @param {Object} opts
@@ -105,6 +106,10 @@ export function openAptModal({ id, floor=null, row=null, tintHex=null }){
   // Mostrar
   backdrop.classList.add('show');
   backdrop.setAttribute('aria-hidden','false');
+
+  // 🔔 avisa o viewer que o modal abriu (desativa input do canvas, etc.)
+  window.dispatchEvent(new CustomEvent('doge:modal:open'));
+
   setTimeout(()=> closeBtn?.focus(), 0);
 
   // 🔒 Bloquear eventos por 2 frames para matar click fantasma
@@ -130,6 +135,9 @@ export function closeModal(){
   // reabilita canvas 3D
   const canvas = document.querySelector('#app canvas');
   if (canvas) canvas.style.pointerEvents = 'auto';
+
+  // 🔔 avisa o viewer que o modal fechou (reset hard do input, etc.)
+  window.dispatchEvent(new CustomEvent('doge:modal:close'));
 
   if (lastFocused && typeof lastFocused.focus === 'function'){
     setTimeout(()=> lastFocused.focus(), 0);
