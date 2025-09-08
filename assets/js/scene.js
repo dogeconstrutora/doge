@@ -574,6 +574,10 @@ let _zoomTargetRadius = null;
 let _zoomTargetOrbit = null;
 let _zoomSmoothing = 0.22;
 
+let _panOnlyStreakMs = 0;
+let _panOnlyLastTs   = 0;
+const PAN_ONLY_CLEAR_AFTER_MS = 140; // ajuste fino (120–180ms vai bem)
+
 export function zoomDelta(deltaOrObj = 0, isPinch = false) {
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const rNow = clamp(Number(State.radius) || 20, ZOOM_MIN, ZOOM_MAX);
@@ -877,6 +881,12 @@ export function wireUnifiedInput(){
       // === sempre calcule 'mid' primeiro ===
       const mid  = getMidpoint();
 
+      // timestamp p/ streak
+      const nowTs = performance.now();
+      if (!_panOnlyLastTs) _panOnlyLastTs = nowTs;
+      const dtMs = Math.max(0, nowTs - _panOnlyLastTs);
+      _panOnlyLastTs = nowTs;
+
       // === PINCH ZOOM (MOBILE) com deadzone + inversão natural ===
       const dist = getDistance();
       if (pinchPrevDist > 0 && dist > 0){
@@ -888,18 +898,37 @@ export function wireUnifiedInput(){
           // mobile “natural”: pinçar para fora => zoom IN
           scale = 1 / scale;
           zoomDelta({ scale }, true);
+          didZoomThisFrame = true;
         }
       }
       pinchPrevDist = dist;
 
       // === PAN do centro (suave) ===
       const midPrev = pinchPrevMid;
+      let didPanThisFrame = false;
       if (midPrev && mid){
         const mdx = mid.x - midPrev.x;
         const mdy = mid.y - midPrev.y;
-        if (mdx || mdy) panDelta(mdx, mdy);
+        if (mdx || mdy) {
+          panDelta(mdx, mdy);
+          didPanThisFrame = true;
+        }
       }
       pinchPrevMid  = mid;
+      
+      // === Anti-histerese: se só houve PAN (sem zoom) por um tempinho, limpamos alvos do zoom
+      if (didPanThisFrame && !didZoomThisFrame) {
+        _panOnlyStreakMs += dtMs;
+        if (_panOnlyStreakMs >= PAN_ONLY_CLEAR_AFTER_MS) {
+          _zoomTargetRadius = null;
+          _zoomTargetOrbit  = null;
+          // opcional: acelere uma “mão” o pan-only para finalizar qualquer easing residual
+          _zoomSmoothing = 0.22; // mantenha como está, só garantindo que não ficou alterado
+        }
+      } else {
+        // se houve zoom, a streak de pan-only zera
+        _panOnlyStreakMs = 0;
+      }
 
       // === TWIST 2 dedos (ângulo) ===
       const ang = getAngle();
