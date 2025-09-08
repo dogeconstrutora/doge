@@ -378,141 +378,149 @@ export function initHUD(){
     btnSettings.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); openSettingsModal(); }, { passive:false });
   }
 
-  async function openSettingsModal(){
-    const backdrop = document.getElementById('doge-modal-backdrop');
-    const modal    = document.getElementById('doge-modal');
-    const titleEl  = document.getElementById('doge-modal-title');
-    const content  = document.getElementById('doge-modal-content');
-    const closeBtn = document.getElementById('doge-modal-close');
-    const pill     = document.getElementById('doge-modal-pill');
+async function openSettingsModal(){
+  const backdrop = document.getElementById('doge-modal-backdrop');
+  const modal    = document.getElementById('doge-modal');
+  const titleEl  = document.getElementById('doge-modal-title');
+  const content  = document.getElementById('doge-modal-content');
+  const closeBtn = document.getElementById('doge-modal-close');
+  const pill     = document.getElementById('doge-modal-pill');
 
-    if (!backdrop || !modal || !titleEl || !content) return;
+  if (!backdrop || !modal || !titleEl || !content) return;
 
-    // === helpers (mesma ideia do modal.js) ===
-    const getCanvas = () => document.getElementById('doge-canvas') || document.querySelector('#app canvas');
-    const setInputLock = (on) => { (window.DOGE ||= {}).inputLocked = !!on; };
-    const releaseAllCanvasCaptures = () => {
-      const cvs = getCanvas();
-      const dbg = window.DOGE?.__inputDbg;
-      if (!cvs || !dbg) return;
-      if (dbg.captures && cvs.releasePointerCapture) {
-        for (const id of Array.from(dbg.captures)) { try { cvs.releasePointerCapture(id); } catch {} }
-        dbg.captures.clear?.();
-      }
-      try { dbg.pointers?.clear?.(); } catch {}
-    };
-
-    const closeSettingsModal = () => {
-      backdrop.classList.remove('show');
-      backdrop.setAttribute('aria-hidden','true');
-      document.body.classList.remove('modal-open');
-
-      const cvs = getCanvas();
-      if (cvs) {
-        cvs.style.pointerEvents = 'auto';
-        releaseAllCanvasCaptures();
-      }
-      setInputLock(false);
-
-      backdrop.removeEventListener('click', onClickOutside, true);
-      content.removeEventListener('click', onCancelBtn);
-      closeBtn?.removeEventListener('click', closeSettingsModal);
-      document.removeEventListener('keydown', onEsc);
-      if (pill) pill.style.display = '';
-    };
-
-    const onEsc = (e) => {
-      if (e.key === 'Escape' && backdrop.classList.contains('show')) {
-        e.preventDefault();
-        closeSettingsModal();
-      }
-    };
-    const onClickOutside = (e) => { if (e.target === backdrop) closeSettingsModal(); };
-    const onCancelBtn = (e) => {
-      const el = e.target.closest?.('#obraCancel,[data-modal-cancel],.js-modal-cancel,[data-dismiss="modal"]');
-      if (el) { e.preventDefault(); closeSettingsModal(); }
-    };
-
-    // ====== Monta conteúdo ======
-    titleEl.textContent = 'Configurações';
-    if (pill) { pill.textContent = 'Obra'; pill.style.display = 'inline-block'; }
-
-    let obras = [];
-    let errorMsg = '';
-    try{
-      const resp = await fetch('./data/obras.json', { cache:'no-store' });
-      if (!resp.ok){
-        errorMsg = `Não encontrei ./data/obras.json (status ${resp.status}).`;
-      } else {
-        const json = await resp.json();
-        if (Array.isArray(json)) {
-          obras = json.filter(o => o && typeof o.id === 'string');
-          if (obras.length === 0) errorMsg = 'obras.json está vazio ou sem objetos { id, label }.';
-        } else {
-          errorMsg = 'obras.json não é um array JSON.';
-        }
-      }
-    }catch(e){
-      errorMsg = 'Falha ao requisitar obras.json.';
-      console.error('[obras.json] fetch/parse:', e);
+  // === helpers (mesma ideia do modal.js) ===
+  const getCanvas = () => document.getElementById('doge-canvas') || document.querySelector('#app canvas');
+  const setInputLock = (on) => { (window.DOGE ||= {}).inputLocked = !!on; };
+  const releaseAllCanvasCaptures = () => {
+    const cvs = getCanvas();
+    const dbg = window.DOGE?.__inputDbg;
+    if (!cvs || !dbg) return;
+    if (dbg.captures && cvs.releasePointerCapture) {
+      for (const id of Array.from(dbg.captures)) { try { cvs.releasePointerCapture(id); } catch {} }
+      dbg.captures.clear?.();
     }
+    try { dbg.pointers?.clear?.(); } catch {}
+  };
 
-    const qs = new URL(location.href).searchParams;
-    const obraAtual = qs.get('obra') || '';
-    if ((!Array.isArray(obras) || obras.length === 0) && obraAtual) {
-      obras = [{ id: obraAtual, label: obraAtual }];
-    }
+  const closeSettingsModal = () => {
+    // fecha visualmente
+    backdrop.classList.remove('show');
+    backdrop.setAttribute('aria-hidden','true');
+    document.body.classList.remove('modal-open');
 
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = `
-      <div class="form-grid">
-        <label>
-          <span>Obra</span>
-          <select id="obraSelect">
-            ${obras.map(o => `<option value="${o.id}">${o.label ?? o.id}</option>`).join('')}
-          </select>
-        </label>
-        ${errorMsg ? `<p class="error-msg">${errorMsg}</p>` : ''}
-        <div class="actions">
-          <button id="obraCancel" type="button" class="btn-cancel">Cancelar</button>
-          <button id="obraApply" type="button" class="btn-apply">Aplicar</button>
-        </div>
-      </div>
-    `;
-    content.replaceChildren(wrapper);
-
-    const obraSelect = wrapper.querySelector('#obraSelect');
-    if (obraSelect && [...obraSelect.options].some(o => o.value === obraAtual)){
-      obraSelect.value = obraAtual;
-    }
-
-    wrapper.querySelector('#obraApply')?.addEventListener('click', ()=>{
-      const chosen = obraSelect.value;
-      if (!chosen) return;
-      localStorage.setItem('obraId', chosen);
-      const url = new URL(location.href);
-      url.searchParams.set('obra', chosen);
-      location.href = url.toString();
-    }, { passive:true });
-
-    // ====== ABRIR modal ======
+    // reabilita canvas/input
     const cvs = getCanvas();
     if (cvs) {
-      cvs.style.pointerEvents = 'none';
+      cvs.style.pointerEvents = 'auto';
       releaseAllCanvasCaptures();
     }
-    (window.DOGE ||= {}).__inputDbg ||= {};
-    setInputLock(true);
+    setInputLock(false);
 
-    backdrop.classList.add('show');
-    backdrop.setAttribute('aria-hidden','false');
-    document.body.classList.add('modal-open');
+    // remove marcação de "obra" (evita herdar cinza no próximo modal de detalhes)
+    modal.removeAttribute('data-kind');
 
-    content.addEventListener('click', onCancelBtn);
-    closeBtn?.addEventListener('click', closeSettingsModal, { passive:true });
-    backdrop.addEventListener('click', onClickOutside, true);
-    document.addEventListener('keydown', onEsc);
+    // limpa listeners
+    backdrop.removeEventListener('click', onClickOutside, true);
+    content.removeEventListener('click', onCancelBtn);
+    closeBtn?.removeEventListener('click', closeSettingsModal);
+    document.removeEventListener('keydown', onEsc);
+
+    if (pill) pill.style.display = '';
+  };
+
+  const onEsc = (e) => {
+    if (e.key === 'Escape' && backdrop.classList.contains('show')) {
+      e.preventDefault();
+      closeSettingsModal();
+    }
+  };
+  const onClickOutside = (e) => { if (e.target === backdrop) closeSettingsModal(); };
+  const onCancelBtn = (e) => {
+    const el = e.target.closest?.('#obraCancel,[data-modal-cancel],.js-modal-cancel,[data-dismiss="modal"]');
+    if (el) { e.preventDefault(); closeSettingsModal(); }
+  };
+
+  // ====== Monta conteúdo ======
+  // Marca explicitamente este modal como "obra" e força o tint cinza
+  modal.setAttribute('data-kind', 'obra');
+  applyModalTint?.('#6e7681');
+
+  titleEl.textContent = 'Configurações';
+  if (pill) { pill.textContent = 'Obra'; pill.style.display = 'inline-block'; }
+
+  let obras = [];
+  let errorMsg = '';
+  try{
+    const resp = await fetch('./data/obras.json', { cache:'no-store' });
+    if (!resp.ok){
+      errorMsg = `Não encontrei ./data/obras.json (status ${resp.status}).`;
+    } else {
+      const json = await resp.json();
+      if (Array.isArray(json)) {
+        obras = json.filter(o => o && typeof o.id === 'string');
+        if (obras.length === 0) errorMsg = 'obras.json está vazio ou sem objetos { id, label }.';
+      } else {
+        errorMsg = 'obras.json não é um array JSON.';
+      }
+    }
+  }catch(e){
+    errorMsg = 'Falha ao requisitar obras.json.';
+    console.error('[obras.json] fetch/parse:', e);
   }
+
+  const qs = new URL(location.href).searchParams;
+  const obraAtual = qs.get('obra') || '';
+  if ((!Array.isArray(obras) || obras.length === 0) && obraAtual) {
+    obras = [{ id: obraAtual, label: obraAtual }];
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `
+    <div class="form-grid">
+      <label>
+        <span>Obra</span>
+        <select id="obraSelect">
+          ${obras.map(o => `<option value="${o.id}" ${o.id===obraAtual?'selected':''}>${o.label ?? o.id}</option>`).join('')}
+        </select>
+      </label>
+      ${errorMsg ? `<p class="error-msg">${errorMsg}</p>` : ''}
+      <div class="actions">
+        <button id="obraCancel" type="button" class="btn-cancel">Cancelar</button>
+        <button id="obraApply" type="button" class="btn-apply">Aplicar</button>
+      </div>
+    </div>
+  `;
+  content.replaceChildren(wrapper);
+
+  const obraSelect = wrapper.querySelector('#obraSelect');
+
+  wrapper.querySelector('#obraApply')?.addEventListener('click', ()=>{
+    const chosen = obraSelect?.value || '';
+    if (!chosen) return;
+    localStorage.setItem('obraId', chosen);
+    const url = new URL(location.href);
+    url.searchParams.set('obra', chosen);
+    location.href = url.toString();
+  }, { passive:true });
+
+  // ====== ABRIR modal ======
+  const cvs = getCanvas();
+  if (cvs) {
+    cvs.style.pointerEvents = 'none';
+    releaseAllCanvasCaptures();
+  }
+  (window.DOGE ||= {}).__inputDbg ||= {};
+  setInputLock(true);
+
+  backdrop.classList.add('show');
+  backdrop.setAttribute('aria-hidden','false');
+  document.body.classList.add('modal-open');
+
+  content.addEventListener('click', onCancelBtn);
+  closeBtn?.addEventListener('click', closeSettingsModal, { passive:true });
+  backdrop.addEventListener('click', onClickOutside, true);
+  document.addEventListener('keydown', onEsc);
+}
 
   // ===== Sync UI 2D após clique no botão 2D
   const sync2DUI = () => {
@@ -791,3 +799,4 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
+
