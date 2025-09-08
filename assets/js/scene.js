@@ -114,7 +114,9 @@ export function initScene() {
 
   applyOrbitToCamera();
 
-  //setupUnifiedTouchGestureHandler(cvs);
+ if (!(window.DOGE && window.DOGE.USE_VIEWER_POINTERS)) {
+   setupUnifiedTouchGestureHandler(cvs);
+ }
   startAutoFitOnce(); // calcula pivô fixo + Home (não roda se Home já existir)
 
   return { scene, renderer, camera };
@@ -723,7 +725,7 @@ function setupUnifiedTouchGestureHandler(canvas) {
       const centerDeltaY = now.centerY - lastTouches.centerY;
 
       if (Math.abs(distDelta) > Math.max(Math.abs(centerDeltaX), Math.abs(centerDeltaY))) {
-        zoomDelta(distDelta / 120, true);
+        zoomDelta(-distDelta / 120, true);
       } else {
         panDelta(centerDeltaX, centerDeltaY);
       }

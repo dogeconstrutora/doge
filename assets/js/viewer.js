@@ -87,6 +87,9 @@ function installBackdropObserver() {
 
     await loadAllData();
 
+    window.DOGE ||= {};
+window.DOGE.USE_VIEWER_POINTERS = true;
+
     initScene();
     installDebugSpies(); // <<< ADICIONE ESTA LINHA
 
@@ -505,19 +508,20 @@ function wireUnifiedInput(){
       const mid  = getMidpoint();
 
       // === PINCH ZOOM (MOBILE) com deadzone + inversão natural ===
-const dist = getDistance();
-if (pinchPrevDist > 0 && dist > 0){
-  const raw = dist / pinchPrevDist;
-  const logDelta = Math.log(raw);
-  if (Math.abs(logDelta) > 0.003){
-    let scale = Math.pow(raw, 0.85);
-    scale = Math.max(0.8, Math.min(1.25, scale));
-    // inversão natural no MOBILE:
-    scale = 1 / scale;
-    zoomDelta({ scale }, true);
-  }
-}
-pinchPrevDist = dist;
+      const dist = getDistance();
+      if (pinchPrevDist > 0 && dist > 0){
+        const raw = dist / pinchPrevDist;
+        const logDelta = Math.log(raw);
+        // deadzone evita “tremidos” quando o gesto é na verdade pan
+        if (Math.abs(logDelta) > 0.003){
+          let scale = Math.pow(raw, 0.85);
+          scale = Math.max(0.8, Math.min(1.25, scale));
+          // ✔️ mobile “natural”: pinçar para fora => zoom IN
+          scale = 1 / scale;
+          zoomDelta({ scale }, true);
+        }
+      }
+      pinchPrevDist = dist;
 
       // === PAN do centro (suave) ===
       if (pinchPrevMid && mid){
