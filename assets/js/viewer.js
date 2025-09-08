@@ -88,6 +88,54 @@ function installBackdropObserver() {
     await loadAllData();
 
     initScene();
+    installDebugSpies(); // <<< ADICIONE ESTA LINHA
+
+    // === DEBUG SPIES: loga qualquer write em State.radius e set() do orbitTarget ===
+function installDebugSpies() {
+  if (!window.DOGE) window.DOGE = {};
+  window.DOGE_LOG_ZOOM ??= true; // liga/desliga logs de zoom rapidamente
+
+  // --------- Spy em State.radius (setter com log + stack curta) ---------
+  try {
+    if (!Object.getOwnPropertyDescriptor(State, '__radiusSpy')) {
+      let __r = Number(State.radius) || 0;
+      Object.defineProperty(State, 'radius', {
+        configurable: true,
+        enumerable: true,
+        get(){ return __r; },
+        set(v){
+          const prev = __r;
+          __r = v;
+          if (window.DOGE_LOG_ZOOM) {
+            const st = new Error().stack?.split('\n')?.slice(2,6)?.join(' ⟶ ') || '';
+            console.log('[DOGE:spy][radius:set]', { prev, next: v, stack: st });
+          }
+        }
+      });
+      Object.defineProperty(State, '__radiusSpy', { value:true });
+    }
+  } catch (e) {
+    console.warn('[DOGE:spy] radius setter falhou:', e);
+  }
+
+  // --------- Spy no set(x,y,z) do orbitTarget ---------
+  try {
+    if (State.orbitTarget && typeof State.orbitTarget.set === 'function' && !State.orbitTarget.__dogeSetPatched) {
+      const origSet = State.orbitTarget.set.bind(State.orbitTarget);
+      State.orbitTarget.set = function(x,y,z){
+        if (window.DOGE_LOG_ZOOM) {
+          const before = { x:this.x, y:this.y, z:this.z };
+          const after  = { x, y, z };
+          console.log('[DOGE:spy][target.set]', { before, after });
+        }
+        return origSet(x,y,z);
+      };
+      State.orbitTarget.__dogeSetPatched = true;
+    }
+  } catch (e) {
+    console.warn('[DOGE:spy] orbitTarget.set patch falhou:', e);
+  }
+}
 
     // IMPORTANTE: desliga qualquer auto-fit interno que o scene faça (timer)
     disableAutoFit?.();
@@ -221,14 +269,19 @@ window.addEventListener('keydown', (e)=>{
 }, { passive:true });
 
 // ============================
-// Tracking da tecla Space (Space + esquerdo = Pan)
+// Tracking da tecla Ctrl (Ctrl + esquerdo = Pan)
 // ============================
-let __spacePressed = false;
+let __ctrlPressed = false;
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Space') { __spacePressed = true; e.preventDefault(); }
+  if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
+    __ctrlPressed = true;
+    e.preventDefault();
+  }
 }, { passive:false });
 window.addEventListener('keyup', (e) => {
-  if (e.code === 'Space') __spacePressed = false;
+  if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
+    __ctrlPressed = false;
+  }
 }, { passive:true });
 
 // ============================
@@ -245,9 +298,49 @@ window.addEventListener('keyup', (e) => {
 // ============================
 function wireUnifiedInput(){
   const cvs = getCanvas();
+  // Só focar no ponteiro se o zoom realmente mudar o radius
+function willZoomApply(scale){
+  const r = Number(State.radius) || 20;
+  const rMin = (window.DOGE?.ZOOM_MIN ?? 4);
+  const rMax = (window.DOGE?.ZOOM_MAX ?? 400);
+  const target = Math.min(rMax, Math.max(rMin, r * scale));
+  return Math.abs(target - r) > 1e-3;
+}
+
   if (!cvs) return;
 
-  // ---------- Gestos "legacy" do Safari/macOS (escala/rotação expostas)
+  const dbg = (tag, o) => { if (window.DOGE?.debugZoom) console.debug(tag, o||''); };
+
+  // ───────────────────────────────────────────────────────────────
+  // 1) BLOQUEIO GLOBAL do page zoom apenas sobre o canvas
+  // ───────────────────────────────────────────────────────────────
+  (function installGlobalPinchBlock(el){
+    const inCanvasByPoint = (ev) => {
+      if (typeof ev.clientX !== 'number' || typeof ev.clientY !== 'number') return false;
+      const r = el.getBoundingClientRect();
+      return ev.clientX >= r.left && ev.clientX <= r.right &&
+             ev.clientY >= r.top  && ev.clientY <= r.bottom;
+    };
+
+    const onWheelCapture = (ev) => {
+      // pinch do touchpad (Chromium/Firefox) sinaliza ctrl/meta — só usamos para BLOQUEAR page-zoom
+      if ((ev.ctrlKey || ev.metaKey) && inCanvasByPoint(ev)) {
+        ev.preventDefault();
+      }
+    };
+
+    const onGestureCapture = (ev) => { // Safari/macOS
+      if (inCanvasByPoint(ev)) ev.preventDefault();
+    };
+
+    document.addEventListener('wheel',         onWheelCapture,    { passive:false, capture:true });
+    document.addEventListener('gesturestart',  onGestureCapture,  { passive:false, capture:true });
+    document.addEventListener('gesturechange', onGestureCapture,  { passive:false, capture:true });
+  })(cvs);
+
+  // ───────────────────────────────────────────────────────────────
+  // 2) Gestos "legacy" do Safari/macOS (escala/rotação expostas)
+  // ───────────────────────────────────────────────────────────────
   let _gPrevScale = 1;
   let _gPrevRotationDeg = 0;
 
@@ -261,14 +354,13 @@ function wireUnifiedInput(){
   cvs.addEventListener('gesturechange', (e) => {
     if (inputLocked()) return;
 
-    // Pinch (zoom)
     if (typeof e.scale === 'number' && e.scale > 0) {
       let factor = e.scale / (_gPrevScale || 1);
       factor = Math.max(0.8, Math.min(1.25, factor));
+      dbg('[DOGE:zoom][gesturechange]', {factor});
       zoomDelta({ scale: factor }, /*isPinch=*/true);
       _gPrevScale = e.scale;
     }
-    // Twist (rotação)
     if (typeof e.rotation === 'number') {
       const dDeg = e.rotation - _gPrevRotationDeg;
       if (Math.abs(dDeg) > 0.05) {
@@ -280,39 +372,38 @@ function wireUnifiedInput(){
     e.preventDefault();
   }, { passive:false });
 
-  cvs.addEventListener('gestureend',    (e) => {
+  cvs.addEventListener('gestureend', (e) => {
     if (inputLocked()) return;
     _gPrevScale = 1;
     _gPrevRotationDeg = 0;
     e.preventDefault();
   }, { passive:false });
 
-  // ---------- PAN LATCH (duplo-clique / double-tap) ----------
-  let panLatchUntil = 0;          // mouse: tempo limite p/ arrasto virar pan
-  let touchPanArmedUntil = 0;     // touch: idem (após double-tap)
+  // ───────────────────────────────────────────────────────────────
+  // 3) PAN LATCH (duplo-clique / double-tap)
+  // ───────────────────────────────────────────────────────────────
+  let panLatchUntil = 0;
+  let touchPanArmedUntil = 0;
   const PAN_LATCH_MS = 650;
 
-  // Mouse: duplo-clique arma pan com botão esquerdo temporariamente
   cvs.addEventListener('dblclick', (e) => {
     if (inputLocked()) return;
     panLatchUntil = performance.now() + PAN_LATCH_MS;
     e.preventDefault();
   }, { passive:false });
 
-  // Touch: double-tap detection (para armar pan de 1 dedo)
   let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
   const DOUBLE_TAP_MS = 300;
-  const DOUBLE_TAP_MAX_D = 22; // px
+  const DOUBLE_TAP_MAX_D = 22;
 
   cvs.addEventListener('touchstart', (e) => {
     if (inputLocked()) return;
-    if (e.touches.length !== 1) return; // apenas 1 dedo conta como tap
+    if (e.touches.length !== 1) return;
     const t = performance.now();
     const x = e.touches[0].clientX, y = e.touches[0].clientY;
     const dt = t - lastTapTime;
     const dx = x - lastTapX, dy = y - lastTapY;
     if (dt < DOUBLE_TAP_MS && Math.hypot(dx, dy) < DOUBLE_TAP_MAX_D) {
-      // Double-tap: arma pan de 1 dedo por curto período
       touchPanArmedUntil = t + PAN_LATCH_MS;
       e.preventDefault();
     }
@@ -322,33 +413,30 @@ function wireUnifiedInput(){
   const isPanLatchActive = () => performance.now() < panLatchUntil;
   const isTouchPanArmed = () => performance.now() < touchPanArmedUntil;
 
-  // ---------- Pointer Events unificados (mouse/touch)
-  const pointers = new Map(); // id -> {x,y,button,ptype,mode}
+  // ───────────────────────────────────────────────────────────────
+  // 4) Pointer unificado (mouse/touch)
+  // ───────────────────────────────────────────────────────────────
+  const pointers = new Map();
   let pinchPrevDist = 0;
   let pinchPrevMid  = null;
-  let pinchPrevAng  = 0; // ângulo entre dedos no frame anterior
+  let pinchPrevAng  = 0;
 
-  const TWIST_SENS_MOUSE = 0.012; // sensibilidade do twist no botão direito
+  const TWIST_SENS_MOUSE = 0.012;
 
   if (!window.DOGE) window.DOGE = {};
-  window.DOGE.__inputDbg = {
-    pointers,
-    captures: new Set(),
-    cntDown: 0, cntUp: 0, cntLost: 0, cntWheel: 0, cntGesture: 0
-  };
+  window.DOGE.__inputDbg = { pointers, captures:new Set(), cntDown:0, cntUp:0, cntLost:0, cntWheel:0, cntGesture:0 };
 
-  const setModeForPointer = (pe, activePointersCount) => {
+  const setModeForPointer = (pe, activeCount) => {
     if (pe.pointerType === 'mouse') {
       if (pe.button === 0 && isPanLatchActive()) return 'pan';
-      if (pe.button === 1) return 'pan';                   // botão do meio
-      if (pe.button === 2) return 'twist';                 // botão direito
-      if (pe.button === 0 && __spacePressed) return 'pan'; // Space + esquerdo
-      return 'orbit';                                      // esquerdo
+      if (pe.button === 1) return 'pan';
+      if (pe.button === 2) return 'twist';
+      if (pe.button === 0 && __ctrlPressed) return 'pan';
+      return 'orbit';
     }
-    // Touch:
-    if (activePointersCount >= 2) return 'gesture2';       // 2 dedos = bloco de gesto
-    if (isTouchPanArmed()) return 'pan';                   // 1 dedo armado por double-tap
-    return 'orbit';                                        // padrão 1 dedo
+    if (activeCount >= 2) return 'gesture2';
+    if (isTouchPanArmed()) return 'pan';
+    return 'orbit';
   };
 
   const arrPts = () => [...pointers.values()];
@@ -362,26 +450,18 @@ function wireUnifiedInput(){
   };
   const getAngle = () => {
     const a = arrPts(); if (a.length < 2) return 0;
-    const dx = a[1].x - a[0].x;
-    const dy = a[1].y - a[0].y;
-    return Math.atan2(dy, dx); // rad
+    const dx = a[1].x - a[0].x, dy = a[1].y - a[0].y;
+    return Math.atan2(dy, dx);
   };
 
-  // Pointer Down
-cvs.addEventListener('pointerdown', (e)=>{
-  // Failsafe: se o DOM indica modal fechado mas o lock ficou preso → solta
-  if (!isModalOpen() && window.DOGE && window.DOGE.inputLocked) {
-    window.DOGE.inputLocked = false;
-    const pe = getComputedStyle(cvs).pointerEvents;
-    if (pe !== 'auto') cvs.style.pointerEvents = 'auto';
-  }
-
-  if (inputLocked()) return;
-
-  // Se canvas ficou desabilitado por qualquer razão, reabilita no primeiro gesto
-  const peCanvas = getComputedStyle(cvs).pointerEvents;
-  if (peCanvas !== 'auto') cvs.style.pointerEvents = 'auto';
-
+  cvs.addEventListener('pointerdown', (e)=>{
+    if (!isModalOpen() && window.DOGE && window.DOGE.inputLocked) {
+      window.DOGE.inputLocked = false;
+      const pe = getComputedStyle(cvs).pointerEvents;
+      if (pe !== 'auto') cvs.style.pointerEvents = 'auto';
+    }
+    if (inputLocked()) return;
+    if (getComputedStyle(cvs).pointerEvents !== 'auto') cvs.style.pointerEvents = 'auto';
 
     window.DOGE.__inputDbg.cntDown++;
     cvs.setPointerCapture?.(e.pointerId);
@@ -401,7 +481,6 @@ cvs.addEventListener('pointerdown', (e)=>{
     e.preventDefault();
   }, { passive:false });
 
-  // Pointer Move
   cvs.addEventListener('pointermove', (e)=>{
     if (inputLocked()) return;
     if (!pointers.has(e.pointerId)) return;
@@ -414,32 +493,29 @@ cvs.addEventListener('pointerdown', (e)=>{
 
     if (count === 1){
       const dx = p.x - px, dy = p.y - py;
-
       switch (p.mode) {
-        case 'pan':
-          panDelta(dx, dy);
-          break;
-        case 'twist':
-          // botão direito (mouse): roll em torno do eixo de visão
-          orbitTwist(dx * TWIST_SENS_MOUSE);
-          break;
-        default: // 'orbit'
-          orbitDelta(dx, dy, p.ptype !== 'mouse'); // yaw/pitch (sem roll)
+        case 'pan':   panDelta(dx, dy); break;
+        case 'twist': orbitTwist(dx * TWIST_SENS_MOUSE); break;
+        default:      orbitDelta(dx, dy, p.ptype !== 'mouse');
       }
-
     } else if (count === 2){
-      // === PINCH (zoom) ===
+      // pinch zoom (tela)
       const dist = getDistance();
       if (pinchPrevDist > 0 && dist > 0){
         let scale = dist / pinchPrevDist;
         const exponent = 0.85;
         scale = Math.pow(scale, exponent);
         scale = Math.max(0.8, Math.min(1.25, scale));
-        zoomDelta({ scale }, true);
+          const r = cvs.getBoundingClientRect();
+  const x = (mid.x - r.left) / r.width;
+  const y = (mid.y - r.top)  / r.height;
+  const ndc = { x: x * 2 - 1, y: -(y * 2 - 1) };
+
+  zoomDelta({ scale, focusNDC: ndc }, true);
       }
       pinchPrevDist = dist;
 
-      // === PAN do centro ===
+      // pan do centro
       const mid  = getMidpoint();
       if (pinchPrevMid && mid){
         const mdx = mid.x - pinchPrevMid.x;
@@ -448,22 +524,18 @@ cvs.addEventListener('pointerdown', (e)=>{
       }
       pinchPrevMid  = mid;
 
-      // === TWIST (roll) — rotação de dois dedos ===
+      // twist 2 dedos
       const ang = getAngle();
       let dAng = ang - pinchPrevAng;
       if (dAng >  Math.PI) dAng -= 2*Math.PI;
       if (dAng < -Math.PI) dAng += 2*Math.PI;
-
-      if (Math.abs(dAng) > 1e-4) {
-        orbitTwist(-dAng);
-      }
+      if (Math.abs(dAng) > 1e-4) orbitTwist(-dAng);
       pinchPrevAng = ang;
     }
 
     e.preventDefault();
   }, { passive:false });
 
-  // Pointer Up/Cancel
   const clearPointer = (e)=>{
     window.DOGE.__inputDbg.cntUp++;
     window.DOGE.__inputDbg.captures.delete(e.pointerId);
@@ -482,31 +554,61 @@ cvs.addEventListener('pointerdown', (e)=>{
     clearPointer(e);
   }, { passive:true });
 
-  // Wheel (desktop/trackpad) = zoom
-  // - Trackpad pinch (Chrome/Edge/Firefox) chega como wheel com ctrlKey=true.
-  cvs.addEventListener('wheel', (e)=>{
-    if (inputLocked()) return;
 
-    e.preventDefault();
+  // ——— helpers para decidir se o zoom muda o raio e em que direção
+const ZOOM_MIN = 4, ZOOM_MAX = 400;      // mantenha iguais ao scene.js
+const EPS = 1e-4;
 
-    if (e.ctrlKey) {
-      // Fallback para pinch do trackpad (Ctrl+wheel)
-      const unit = (e.deltaMode === 1) ? 33 : (e.deltaMode === 2) ? 120 : 1;
-      const dy   = e.deltaY * unit;
-      let scale = Math.exp((-dy) * 0.0012);
-      scale = Math.max(0.8, Math.min(1.25, scale));
-      zoomDelta({ scale }, /*isPinch=*/true);
-      return;
-    }
+function nextRadiusIf(scale){
+  const r0 = Number(State.radius) || 20;
+  const r1 = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, r0 * scale));
+  return { r0, r1, delta: r1 - r0 };
+}
 
-    // Scroll normal → zoom por roda (mouse)
-    const unit = (e.deltaMode === 1) ? 33 : (e.deltaMode === 2) ? 120 : 1;
-    const dy   = e.deltaY * unit;
-    let scale = Math.exp(dy * 0.0011);
-    scale = Math.max(0.8, Math.min(1.25, scale));
-    zoomDelta({ scale }, /*isPinch=*/false);
-  }, { passive:false });
+function shouldFocusPointer(scale){
+  const { r0, r1, delta } = nextRadiusIf(scale);
+  if (Math.abs(delta) < EPS) return false;               // não vai mudar nada
+  // Se está colado no mínimo e ainda tenta aproximar (zoom-in), não foca
+  if (r0 <= ZOOM_MIN + 1e-3 && r1 <= r0) return false;
+  // Se está colado no máximo e ainda tenta afastar (zoom-out), não foca
+  if (r0 >= ZOOM_MAX - 1e-3 && r1 >= r0) return false;
+  return true;
+}
 
-  // Bloqueia menu do botão direito (necessário para twist com right-drag)
+  // ───────────────────────────────────────────────────────────────
+  // 5) Wheel (mouse/trackpad) = zoom
+  //    INVERTIDO SÓ PARA PINCH DO TOUCHPAD (ctrl/meta true)
+  // ───────────────────────────────────────────────────────────────
+cvs.addEventListener('wheel', (e) => {
+  if (inputLocked()) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  const unit = (e.deltaMode === 1) ? 33 : (e.deltaMode === 2) ? 120 : 1;
+  const dy   = e.deltaY * unit;
+
+  // Pinch do touchpad (Chromium/Firefox sinalizam ctrl/meta):
+  // invertido para: afastar dedos => zoom IN (mantém seu ajuste)
+  const isTrackpadPinch = (e.ctrlKey || e.metaKey);
+  const k = isTrackpadPinch ? +0.008 : -0.008;
+  let scale = Math.exp(dy * k);
+  scale = Math.max(0.75, Math.min(1.35, scale));
+
+  // NDC do ponteiro
+  const r = cvs.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width;
+  const y = (e.clientY - r.top)  / r.height;
+  const ndc = { x: x * 2 - 1, y: -(y * 2 - 1) };
+
+  // Agora o foco no ponteiro é aplicado DENTRO do zoomDelta (suave e sem drift)
+  zoomDelta({ scale, focusNDC: ndc }, /*isPinch=*/isTrackpadPinch);
+}, { passive:false });
+
+
+
+
+
+  // Necessário para twist com right-drag
   cvs.addEventListener('contextmenu', e => e.preventDefault(), { passive:false });
 }

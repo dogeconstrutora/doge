@@ -577,8 +577,8 @@ body.grid2d-on #overlay2d { backdrop-filter: blur(2px); }
   top: 12px; left: 12px;
   width: 12px; height: 12px;
   border-radius: 999px;
-  border: 1px solid rgba(255,199,0,.9);
-  background: radial-gradient(circle, #ffd000 40%, #ffb300 70%, #ff8c00 100%);
+  border: 1px solid rgba(88,166,255,.9); /* azul */
+  background: radial-gradient(circle, #58a6ff 40%, #1f6feb 70%, #1158c7 100%);
   box-shadow: 0 0 0 2px rgba(0,0,0,.25);
   cursor: pointer;
   z-index: 30;
@@ -589,8 +589,9 @@ body.grid2d-on #overlay2d { backdrop-filter: blur(2px); }
   position: absolute; inset: -4px;
   border-radius: 999px;
   animation: hud-dot-pulse 2s infinite;
-  border: 2px solid rgba(255, 208, 0, .35);
+  border: 2px solid rgba(88,166,255,.35); /* azul translúcido */
 }
+
 @keyframes hud-dot-pulse{
   0%   { transform: scale(0.8); opacity: .7; }
   70%  { transform: scale(1.4); opacity: 0; }
@@ -621,4 +622,3 @@ body.grid2d-on #overlay2d { backdrop-filter: blur(2px); }
 #btnResetAll:active{ transform: scale(0.98); }
 #btnResetAll:focus{ outline:none; }
 #btnResetAll:focus-visible{ box-shadow: 0 0 0 2px rgba(88,166,255,.25); }
-

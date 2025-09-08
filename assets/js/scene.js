@@ -8,6 +8,7 @@ export let scene, renderer, camera;
 
 // IDs de animação
 let _zoomAnim = null;
+let _zoomTarget = null;
 let _panAnim = null;
 let _pendingPan = null;
 
@@ -26,8 +27,8 @@ const ZOOM_EXP_K_WHEEL = 0.27;
 const ZOOM_EXP_K_PINCH = 2;
 const ZOOM_FACTOR_MIN = 0.5;
 const ZOOM_FACTOR_MAX = 2.0;
-const ZOOM_MIN = 4;
-const ZOOM_MAX = 400;
+export const ZOOM_MIN = 4;
+export const ZOOM_MAX = 400;
 
 // Auto-fit inicial
 let _autoFitTimer = null;
@@ -530,47 +531,176 @@ function animatePan() {
 }
 
 // ========== ZOOM SUAVE ==========
+// ====== ZOOM SUAVE (com foco opcional no ponteiro) ======
+// === Estado do zoom suave acumulado (evita truncar/restart) ===
+let _zoomRAF = null;
+let _zoomTargetRadius = null;       // destino acumulado de raio
+let _zoomTargetOrbit = null;        // destino acumulado do alvo (com foco)
+let _zoomSmoothing = 0.22;          // 0..1 - mais alto = chega mais rápido
+
+// ====== ZOOM SUAVE (acumulativo, com foco opcional no ponteiro) ======
 export function zoomDelta(deltaOrObj = 0, isPinch = false) {
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const r0 = clamp(Number(State.radius) || 20, ZOOM_MIN, ZOOM_MAX);
+  const rNow = clamp(Number(State.radius) || 20, ZOOM_MIN, ZOOM_MAX);
 
-  let factor = 1;
+  // 1) normaliza "scale" a partir de deltaOrObj
+  let scale = 1;
   if (deltaOrObj && typeof deltaOrObj === 'object' && typeof deltaOrObj.scale === 'number') {
-    factor = Number(deltaOrObj.scale) || 1;
+    scale = Number(deltaOrObj.scale) || 1;
   } else {
     const delta = Number(deltaOrObj) || 0;
     if (delta === 0) return;
     const k = isPinch ? ZOOM_EXP_K_PINCH : ZOOM_EXP_K_WHEEL;
-    factor = Math.exp(delta * k);
+    scale = Math.exp(delta * k);
+  }
+  // micro-clamp por evento
+  scale = clamp(scale, ZOOM_FACTOR_MIN, ZOOM_FACTOR_MAX);
+
+  // 2) destino de raio acumulado (multiplicativo)
+  const rBase = (_zoomTargetRadius != null) ? _zoomTargetRadius : rNow;
+  let rDest = clamp(rBase * scale, ZOOM_MIN, ZOOM_MAX);
+
+  // 3) decide se aplicamos foco (só se não colou no limite)
+  const atMin = Math.abs(rDest - ZOOM_MIN) < 1e-6;
+  const atMax = Math.abs(rDest - ZOOM_MAX) < 1e-6;
+
+  // pega alvo base para chegar
+  const tBase = (_zoomTargetOrbit && _zoomTargetOrbit.isVector3) ? _zoomTargetOrbit.clone()
+                : State.orbitTarget.clone();
+  let tDest = tBase.clone();
+
+  if (!atMin && !atMax && deltaOrObj && deltaOrObj.focusNDC && typeof deltaOrObj.focusNDC.x === 'number') {
+    try {
+      const ndcX = deltaOrObj.focusNDC.x;
+      const ndcY = deltaOrObj.focusNDC.y;
+
+      const camPos = camera.position.clone();
+      const ptNdc  = new THREE.Vector3(ndcX, ndcY, 0.5).unproject(camera);
+      const dir    = ptNdc.sub(camPos).normalize();
+
+      // plano perpendicular à câmera que passa pelo alvo atual (tBase)
+      const n = camera.getWorldDirection(new THREE.Vector3());
+      const denom = dir.dot(n);
+      if (Math.abs(denom) > 1e-6) {
+        const t = tBase.clone().sub(camPos).dot(n) / denom;
+        if (t > 0) {
+          const hit    = camPos.clone().addScaledVector(dir, t);  // ponto sob o cursor
+          const toward = hit.sub(tBase);
+          const eff    = rDest / rBase;               // <1 → aproxima; >1 → afasta
+          const alpha  = (1 - eff);                   // quanto puxar o alvo na mesma “proporção” do zoom
+          tDest = tBase.clone().addScaledVector(toward, alpha);
+        }
+      }
+    } catch {}
   }
 
-  factor = clamp(factor, ZOOM_FACTOR_MIN, ZOOM_FACTOR_MAX);
-  const target = clamp(r0 * factor, ZOOM_MIN, ZOOM_MAX);
+  // 4) guarda destinos acumulados
+  _zoomTargetRadius = rDest;
+  _zoomTargetOrbit  = tDest;
 
-  if (Math.abs(target - r0) < 0.01) {
-    State.radius = target;
+  // 5) se não há RAF rodando, inicia um que relaxa até os alvos acumulados
+  if (_zoomRAF) return;
+
+  const step = () => {
+    if (_zoomTargetRadius == null) { _zoomRAF = null; return; }
+
+    // ler estado atual
+    const rCur = clamp(Number(State.radius) || 20, ZOOM_MIN, ZOOM_MAX);
+    const tCur = State.orbitTarget.clone();
+
+    // easing exponencial “relax”: aproxima um pouco a cada frame
+    const s = _zoomSmoothing; // 0.22 padrão; ajuste fino aqui
+
+    // raio: interpola multiplicativamente para manter sensação uniforme
+    // (fazemos no logspace: r = rCur * (rDest/rCur)^s )
+    const ratio = (_zoomTargetRadius / Math.max(rCur, 1e-9));
+    const rNext = clamp(rCur * Math.pow(Math.max(ratio, 1e-9), s), ZOOM_MIN, ZOOM_MAX);
+
+    // alvo: lerp em espaço linear
+    const tNext = new THREE.Vector3(
+      tCur.x + ( _zoomTargetOrbit.x - tCur.x) * s,
+      tCur.y + ( _zoomTargetOrbit.y - tCur.y) * s,
+      tCur.z + ( _zoomTargetOrbit.z - tCur.z) * s
+    );
+
+    // aplica
+    State.radius = rNext;
+    State.orbitTarget.copy(tNext);
     applyOrbitToCamera();
     render();
-    return;
+
+    // condição de parada (quando ambos ficaram bem perto do destino)
+    const closeR = Math.abs(_zoomTargetRadius - rNext) / Math.max(_zoomTargetRadius, 1) < 1e-3;
+    const closeT = tNext.distanceToSquared(_zoomTargetOrbit) < 1e-4;
+
+    if (closeR && closeT) {
+      // estabiliza exatamente no destino
+      State.radius = _zoomTargetRadius;
+      State.orbitTarget.copy(_zoomTargetOrbit);
+      applyOrbitToCamera();
+      render();
+
+      _zoomTargetRadius = null;
+      _zoomTargetOrbit  = null;
+      _zoomRAF = null;
+      return;
+    }
+
+    _zoomRAF = requestAnimationFrame(step);
+  };
+
+  _zoomRAF = requestAnimationFrame(step);
+}
+
+
+
+
+// === ZOOM FOCALIZADO NO PONTEIRO ============================================
+// Mantém o ponto sob o cursor parado na tela enquanto aproxima/afasta
+export function zoomAtPointer({ scale = 1, ndcX = 0, ndcY = 0, isPinch = false }) {
+  // sanity
+  if (!renderer || !camera) return;
+  if (!(Number.isFinite(ndcX) && Number.isFinite(ndcY))) {
+    // sem NDC => cai no zoom normal
+    return zoomDelta({ scale }, isPinch);
   }
 
-  if (_zoomAnim) { cancelAnimationFrame(_zoomAnim); _zoomAnim = null; }
+  // Ray a partir do cursor (em NDC)
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
 
-  const dur = isPinch ? 90 : 240;
-  const t0 = performance.now();
-  const ease = t => 1 - Math.pow(1 - t, 3);
+  // Plano através do orbitTarget, normal ao eixo de visão (camera -> target)
+  const target = ensureOrbitTargetVec3();
+  const camDir = camera.getWorldDirection(new THREE.Vector3()).normalize();
+  const plane  = new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, target);
 
-  const ratio = target / r0;
-  function stepZoom(now) {
-    const k = Math.min(1, (now - t0) / dur);
-    const e = ease(k);
-    State.radius = r0 * Math.pow(ratio, e);
+  // Interseção ANTES do zoom
+  const hitBefore = new THREE.Vector3();
+  const okBefore = raycaster.ray.intersectPlane(plane, hitBefore);
+
+  // Aplica o zoom (mesma lógica/limits do zoomDelta)
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const r0 = clamp(Number(State.radius) || 20, ZOOM_MIN, ZOOM_MAX);
+  let f = Number(scale) || 1;
+  f = clamp(f, ZOOM_FACTOR_MIN, ZOOM_FACTOR_MAX);
+  const r1 = clamp(r0 * f, ZOOM_MIN, ZOOM_MAX);
+  State.radius = r1;
+
+  // Reposiciona câmera com o novo raio
+  applyOrbitToCamera();
+
+  // Interseção DEPOIS do zoom com o MESMO raio
+  const hitAfter = new THREE.Vector3();
+  const okAfter = raycaster.ray.intersectPlane(plane, hitAfter);
+
+  // Se conseguimos os dois pontos, desloca o target pelo delta para “puxar” o zoom ao cursor
+  if (okBefore && okAfter) {
+    const delta = hitAfter.sub(hitBefore); // quanto "andou" o ponto sob o cursor
+    State.orbitTarget.sub(delta);          // compensa movendo o alvo no sentido oposto
     applyOrbitToCamera();
-    render();
-    if (k < 1) _zoomAnim = requestAnimationFrame(stepZoom);
-    else _zoomAnim = null;
   }
-  _zoomAnim = requestAnimationFrame(stepZoom);
+
+  render();
 }
 
 // ========== TOQUE UNIFICADO ==========
