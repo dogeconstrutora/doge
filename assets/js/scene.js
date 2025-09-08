@@ -7,8 +7,6 @@ import { State } from './state.js';
 export let scene, renderer, camera;
 
 // IDs de animação
-let _zoomAnim = null;
-let _zoomTarget = null;
 let _panAnim = null;
 let _pendingPan = null;
 
@@ -26,7 +24,7 @@ const PAN_SMOOTH = 0.22;
 const ZOOM_EXP_K_WHEEL = 0.27;
 const ZOOM_EXP_K_PINCH = 2;
 const ZOOM_FACTOR_MIN = 0.5;
-const ZOOM_FACTOR_MAX = 2.0;
+const ZOOM_FACTOR_MAX = 1.35; // (ajuste fino p/ wheel/pinch)
 export const ZOOM_MIN = 4;
 export const ZOOM_MAX = 400;
 
@@ -50,8 +48,7 @@ const Home = {
   phi: 0
 };
 
-
-// --- Two-finger gesture guard: bloqueia recentralizações durante gesto de 2 dedos
+// Guard para gestos de dois dedos (evita recenters/fit/reset durante pinch)
 let __touchIds = new Set();
 function _onPtrDown(e){ if (e.pointerType === 'touch') __touchIds.add(e.pointerId); }
 function _onPtrUp(e){ if (e.pointerType === 'touch') __touchIds.delete(e.pointerId); }
@@ -63,7 +60,10 @@ function installTwoFingerGuard(){
   window.addEventListener('lostpointercapture', _onPtrUp, { passive:true });
 }
 
-
+// Leitura do lock global (modal etc.) — viewer mantém window.DOGE.inputLocked
+function inputLocked(){
+  return !!(window.DOGE && window.DOGE.inputLocked);
+}
 
 function saveHomeFromState() {
   Home.has = true;
@@ -123,18 +123,16 @@ export function initScene() {
   if (!Number.isFinite(State.radius)) State.radius = 28;
 
   getAppEl().prepend(cvs);
-  installTwoFingerGuard(); // impede recenter/fit/reset durante gesto com 2 dedos
-
+  installTwoFingerGuard();
 
   window.addEventListener('resize', onResize, { passive: true });
   onResize();
 
   applyOrbitToCamera();
-
- if (!(window.DOGE && window.DOGE.USE_VIEWER_POINTERS)) {
-   setupUnifiedTouchGestureHandler(cvs);
- }
   startAutoFitOnce(); // calcula pivô fixo + Home (não roda se Home já existir)
+
+  // Input unificado agora mora aqui
+  wireUnifiedInput();
 
   return { scene, renderer, camera };
 }
@@ -552,20 +550,17 @@ function animatePan() {
   }
 }
 
-// ========== ZOOM SUAVE ==========
-// ====== ZOOM SUAVE (com foco opcional no ponteiro) ======
-// === Estado do zoom suave acumulado (evita truncar/restart) ===
-let _zoomRAF = null;
-let _zoomTargetRadius = null;       // destino acumulado de raio
-let _zoomTargetOrbit = null;        // destino acumulado do alvo (com foco)
-let _zoomSmoothing = 0.22;          // 0..1 - mais alto = chega mais rápido
-
 // ====== ZOOM SUAVE (acumulativo, com foco opcional no ponteiro) ======
+let _zoomRAF = null;
+let _zoomTargetRadius = null;
+let _zoomTargetOrbit = null;
+let _zoomSmoothing = 0.22;
+
 export function zoomDelta(deltaOrObj = 0, isPinch = false) {
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const rNow = clamp(Number(State.radius) || 20, ZOOM_MIN, ZOOM_MAX);
 
-  // 1) normaliza "scale" a partir de deltaOrObj
+  // 1) normaliza "scale"
   let scale = 1;
   if (deltaOrObj && typeof deltaOrObj === 'object' && typeof deltaOrObj.scale === 'number') {
     scale = Number(deltaOrObj.scale) || 1;
@@ -575,18 +570,16 @@ export function zoomDelta(deltaOrObj = 0, isPinch = false) {
     const k = isPinch ? ZOOM_EXP_K_PINCH : ZOOM_EXP_K_WHEEL;
     scale = Math.exp(delta * k);
   }
-  // micro-clamp por evento
   scale = clamp(scale, ZOOM_FACTOR_MIN, ZOOM_FACTOR_MAX);
 
-  // 2) destino de raio acumulado (multiplicativo)
+  // 2) destino de raio acumulado
   const rBase = (_zoomTargetRadius != null) ? _zoomTargetRadius : rNow;
   let rDest = clamp(rBase * scale, ZOOM_MIN, ZOOM_MAX);
 
-  // 3) decide se aplicamos foco (só se não colou no limite)
+  // 3) foco opcional no ponteiro (NDC)
   const atMin = Math.abs(rDest - ZOOM_MIN) < 1e-6;
   const atMax = Math.abs(rDest - ZOOM_MAX) < 1e-6;
 
-  // pega alvo base para chegar
   const tBase = (_zoomTargetOrbit && _zoomTargetOrbit.isVector3) ? _zoomTargetOrbit.clone()
                 : State.orbitTarget.clone();
   let tDest = tBase.clone();
@@ -600,63 +593,52 @@ export function zoomDelta(deltaOrObj = 0, isPinch = false) {
       const ptNdc  = new THREE.Vector3(ndcX, ndcY, 0.5).unproject(camera);
       const dir    = ptNdc.sub(camPos).normalize();
 
-      // plano perpendicular à câmera que passa pelo alvo atual (tBase)
       const n = camera.getWorldDirection(new THREE.Vector3());
       const denom = dir.dot(n);
       if (Math.abs(denom) > 1e-6) {
         const t = tBase.clone().sub(camPos).dot(n) / denom;
         if (t > 0) {
-          const hit    = camPos.clone().addScaledVector(dir, t);  // ponto sob o cursor
+          const hit    = camPos.clone().addScaledVector(dir, t);
           const toward = hit.sub(tBase);
-          const eff    = rDest / rBase;               // <1 → aproxima; >1 → afasta
-          const alpha  = (1 - eff);                   // quanto puxar o alvo na mesma “proporção” do zoom
+          const eff    = rDest / rBase;
+          const alpha  = (1 - eff);
           tDest = tBase.clone().addScaledVector(toward, alpha);
         }
       }
     } catch {}
   }
 
-  // 4) guarda destinos acumulados
   _zoomTargetRadius = rDest;
   _zoomTargetOrbit  = tDest;
 
-  // 5) se não há RAF rodando, inicia um que relaxa até os alvos acumulados
   if (_zoomRAF) return;
 
   const step = () => {
     if (_zoomTargetRadius == null) { _zoomRAF = null; return; }
 
-    // ler estado atual
     const rCur = clamp(Number(State.radius) || 20, ZOOM_MIN, ZOOM_MAX);
     const tCur = State.orbitTarget.clone();
 
-    // easing exponencial “relax”: aproxima um pouco a cada frame
-    const s = _zoomSmoothing; // 0.22 padrão; ajuste fino aqui
+    const s = _zoomSmoothing;
 
-    // raio: interpola multiplicativamente para manter sensação uniforme
-    // (fazemos no logspace: r = rCur * (rDest/rCur)^s )
     const ratio = (_zoomTargetRadius / Math.max(rCur, 1e-9));
     const rNext = clamp(rCur * Math.pow(Math.max(ratio, 1e-9), s), ZOOM_MIN, ZOOM_MAX);
 
-    // alvo: lerp em espaço linear
     const tNext = new THREE.Vector3(
-      tCur.x + ( _zoomTargetOrbit.x - tCur.x) * s,
-      tCur.y + ( _zoomTargetOrbit.y - tCur.y) * s,
-      tCur.z + ( _zoomTargetOrbit.z - tCur.z) * s
+      tCur.x + (_zoomTargetOrbit.x - tCur.x) * s,
+      tCur.y + (_zoomTargetOrbit.y - tCur.y) * s,
+      tCur.z + (_zoomTargetOrbit.z - tCur.z) * s
     );
 
-    // aplica
     State.radius = rNext;
     State.orbitTarget.copy(tNext);
     applyOrbitToCamera();
     render();
 
-    // condição de parada (quando ambos ficaram bem perto do destino)
     const closeR = Math.abs(_zoomTargetRadius - rNext) / Math.max(_zoomTargetRadius, 1) < 1e-3;
     const closeT = tNext.distanceToSquared(_zoomTargetOrbit) < 1e-4;
 
     if (closeR && closeT) {
-      // estabiliza exatamente no destino
       State.radius = _zoomTargetRadius;
       State.orbitTarget.copy(_zoomTargetOrbit);
       applyOrbitToCamera();
@@ -674,99 +656,282 @@ export function zoomDelta(deltaOrObj = 0, isPinch = false) {
   _zoomRAF = requestAnimationFrame(step);
 }
 
+// ========== TOQUE / MOUSE / TRACKPAD UNIFICADO ==========
+export function wireUnifiedInput(){
+  const cvs = renderer?.domElement;
+  if (!cvs) return;
 
+  // marca “houve interação” (para qualquer watchdog externo que o viewer use)
+  const markInteracted = () => { (window.DOGE ||= {}).__userInteracted = true; };
 
+  // 1) Bloqueio do page-zoom apenas sobre o canvas
+  (function installGlobalPinchBlock(el){
+    const inCanvasByPoint = (ev) => {
+      if (typeof ev.clientX !== 'number' || typeof ev.clientY !== 'number') return false;
+      const r = el.getBoundingClientRect();
+      return ev.clientX >= r.left && ev.clientX <= r.right &&
+             ev.clientY >= r.top  && ev.clientY <= r.bottom;
+    };
 
-// === ZOOM FOCALIZADO NO PONTEIRO ============================================
-// Mantém o ponto sob o cursor parado na tela enquanto aproxima/afasta
-export function zoomAtPointer({ scale = 1, ndcX = 0, ndcY = 0, isPinch = false }) {
-  // sanity
-  if (!renderer || !camera) return;
-  if (!(Number.isFinite(ndcX) && Number.isFinite(ndcY))) {
-    // sem NDC => cai no zoom normal
-    return zoomDelta({ scale }, isPinch);
-  }
+    const onWheelCapture = (ev) => {
+      if ((ev.ctrlKey || ev.metaKey) && inCanvasByPoint(ev)) ev.preventDefault();
+    };
+    const onGestureCapture = (ev) => { if (inCanvasByPoint(ev)) ev.preventDefault(); };
 
-  // Ray a partir do cursor (em NDC)
-  const raycaster = new THREE.Raycaster();
-  raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
+    document.addEventListener('wheel',         onWheelCapture,    { passive:false, capture:true });
+    document.addEventListener('gesturestart',  onGestureCapture,  { passive:false, capture:true });
+    document.addEventListener('gesturechange', onGestureCapture,  { passive:false, capture:true });
+  })(cvs);
 
-  // Plano através do orbitTarget, normal ao eixo de visão (camera -> target)
-  const target = ensureOrbitTargetVec3();
-  const camDir = camera.getWorldDirection(new THREE.Vector3()).normalize();
-  const plane  = new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, target);
+  // 2) Gestos legacy (Safari/macOS)
+  let _gPrevScale = 1;
+  let _gPrevRotationDeg = 0;
 
-  // Interseção ANTES do zoom
-  const hitBefore = new THREE.Vector3();
-  const okBefore = raycaster.ray.intersectPlane(plane, hitBefore);
+  cvs.addEventListener('gesturestart',  (e) => {
+    markInteracted();
+    if (inputLocked()) return;
+    _gPrevScale = (typeof e.scale === 'number' && e.scale > 0) ? e.scale : 1;
+    _gPrevRotationDeg = (typeof e.rotation === 'number') ? e.rotation : 0;
+    e.preventDefault();
+  }, { passive:false });
 
-  // Aplica o zoom (mesma lógica/limits do zoomDelta)
-  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
-  const r0 = clamp(Number(State.radius) || 20, ZOOM_MIN, ZOOM_MAX);
-  let f = Number(scale) || 1;
-  f = clamp(f, ZOOM_FACTOR_MIN, ZOOM_FACTOR_MAX);
-  const r1 = clamp(r0 * f, ZOOM_MIN, ZOOM_MAX);
-  State.radius = r1;
+  cvs.addEventListener('gesturechange', (e) => {
+    if (inputLocked()) return;
 
-  // Reposiciona câmera com o novo raio
-  applyOrbitToCamera();
-
-  // Interseção DEPOIS do zoom com o MESMO raio
-  const hitAfter = new THREE.Vector3();
-  const okAfter = raycaster.ray.intersectPlane(plane, hitAfter);
-
-  // Se conseguimos os dois pontos, desloca o target pelo delta para “puxar” o zoom ao cursor
-  if (okBefore && okAfter) {
-    const delta = hitAfter.sub(hitBefore); // quanto "andou" o ponto sob o cursor
-    State.orbitTarget.sub(delta);          // compensa movendo o alvo no sentido oposto
-    applyOrbitToCamera();
-  }
-
-  render();
-}
-
-// ========== TOQUE UNIFICADO ==========
-function setupUnifiedTouchGestureHandler(canvas) {
-  let lastTouches = null;
-
-  canvas.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) {
-      lastTouches = getTouchesInfo(e.touches);
-    } else {
-      lastTouches = null;
-    }
-  }, { passive: false });
-
-  canvas.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2 && lastTouches) {
-      const now = getTouchesInfo(e.touches);
-      const distDelta = now.dist - lastTouches.dist;
-      const centerDeltaX = now.centerX - lastTouches.centerX;
-      const centerDeltaY = now.centerY - lastTouches.centerY;
-
-      if (Math.abs(distDelta) > Math.max(Math.abs(centerDeltaX), Math.abs(centerDeltaY))) {
-        zoomDelta(-distDelta / 120, true);
-      } else {
-        panDelta(centerDeltaX, centerDeltaY);
+    if (typeof e.scale === 'number' && e.scale > 0) {
+      let factor = e.scale / (_gPrevScale || 1);
+      if (Math.abs(Math.log(factor)) > 0.003){
+        factor = Math.max(0.8, Math.min(1.25, Math.pow(factor, 0.85)));
+        zoomDelta({ scale: 1 / factor }, /*isPinch=*/true);
       }
-      lastTouches = now;
+      _gPrevScale = e.scale;
+    }
+    if (typeof e.rotation === 'number') {
+      const dDeg = e.rotation - _gPrevRotationDeg;
+      if (Math.abs(dDeg) > 0.05) {
+        const dRad = -(dDeg * Math.PI / 180);
+        orbitTwist(dRad);
+        _gPrevRotationDeg = e.rotation;
+      }
+    }
+    e.preventDefault();
+  }, { passive:false });
+
+  cvs.addEventListener('gestureend', (e) => {
+    if (inputLocked()) return;
+    _gPrevScale = 1;
+    _gPrevRotationDeg = 0;
+    e.preventDefault();
+  }, { passive:false });
+
+  // 3) Pan latch (duplo clique/toque)
+  let panLatchUntil = 0;
+  let touchPanArmedUntil = 0;
+  const PAN_LATCH_MS = 650;
+
+  cvs.addEventListener('dblclick', (e) => {
+    markInteracted();
+    if (inputLocked()) return;
+    panLatchUntil = performance.now() + PAN_LATCH_MS;
+    e.preventDefault();
+  }, { passive:false });
+
+  let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
+  const DOUBLE_TAP_MS = 300;
+  const DOUBLE_TAP_MAX_D = 22;
+
+  cvs.addEventListener('touchstart', (e) => {
+    markInteracted();
+    if (inputLocked()) return;
+    if (e.touches.length !== 1) return;
+    const t = performance.now();
+    const x = e.touches[0].clientX, y = e.touches[0].clientY;
+    const dt = t - lastTapTime;
+    const dx = x - lastTapX, dy = y - lastTapY;
+    if (dt < DOUBLE_TAP_MS && Math.hypot(dx, dy) < DOUBLE_TAP_MAX_D) {
+      touchPanArmedUntil = t + PAN_LATCH_MS;
       e.preventDefault();
     }
-  }, { passive: false });
+    lastTapTime = t; lastTapX = x; lastTapY = y;
+  }, { passive:false });
 
-  canvas.addEventListener('touchend', (e) => {
-    if (e.touches.length < 2) {
-      lastTouches = null;
+  const isPanLatchActive = () => performance.now() < panLatchUntil;
+  const isTouchPanArmed = () => performance.now() < touchPanArmedUntil;
+
+  // 4) Pointer unificado
+  const pointers = new Map();
+  let pinchPrevDist = 0;
+  let pinchPrevMid  = null;
+  let pinchPrevAng  = 0;
+
+  const TWIST_SENS_MOUSE = 0.012;
+
+  // Tracking da tecla Ctrl (Ctrl + esquerdo = Pan)
+  let __ctrlPressed = false;
+  const onKeyDown = (e) => {
+    if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
+      __ctrlPressed = true;
+      e.preventDefault();
     }
-  }, { passive: false });
+  };
+  const onKeyUp = (e) => {
+    if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
+      __ctrlPressed = false;
+    }
+  };
+  window.addEventListener('keydown', onKeyDown, { passive:false });
+  window.addEventListener('keyup', onKeyUp, { passive:true });
 
-  function getTouchesInfo(touches) {
-    const [a, b] = touches;
-    const dx = b.clientX - a.clientX, dy = b.clientY - a.clientY;
-    return {
-      dist: Math.hypot(dx, dy),
-      centerX: (a.clientX + b.clientX) / 2,
-      centerY: (a.clientY + b.clientY) / 2
-    };
-  }
+  const setModeForPointer = (pe, activeCount) => {
+    if (pe.pointerType === 'mouse') {
+      if (pe.button === 0 && isPanLatchActive()) return 'pan';
+      if (pe.button === 1) return 'pan';
+      if (pe.button === 2) return 'twist';
+      if (pe.button === 0 && __ctrlPressed) return 'pan';
+      return 'orbit';
+    }
+    if (activeCount >= 2) return 'gesture2';
+    if (isTouchPanArmed()) return 'pan';
+    return 'orbit';
+  };
+
+  const arrPts = () => [...pointers.values()];
+  const getMidpoint = () => {
+    const a = arrPts(); if (a.length < 2) return null;
+    return { x:(a[0].x+a[1].x)*0.5, y:(a[0].y+a[1].y)*0.5 };
+  };
+  const getDistance = () => {
+    const a = arrPts(); if (a.length < 2) return 0;
+    return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+  };
+  const getAngle = () => {
+    const a = arrPts(); if (a.length < 2) return 0;
+    const dx = a[1].x - a[0].x, dy = a[1].y - a[0].y;
+    return Math.atan2(dy, dx);
+  };
+
+  cvs.addEventListener('pointerdown', (e)=>{
+    markInteracted();
+
+    // failsafe: se algum lock persistiu, solta o pointer-events
+    if (!inputLocked() && getComputedStyle(cvs).pointerEvents !== 'auto') {
+      cvs.style.pointerEvents = 'auto';
+    }
+    if (inputLocked()) return;
+
+    // pointer capture apenas para mouse (multi-touch em mobile pode quebrar)
+    if (e.pointerType === 'mouse') {
+      cvs.setPointerCapture?.(e.pointerId);
+    }
+
+    pointers.set(e.pointerId, {
+      x: e.clientX, y: e.clientY,
+      button: e.button, ptype: e.pointerType,
+      mode: setModeForPointer(e, pointers.size + 1)
+    });
+
+    if (pointers.size === 2){
+      pinchPrevDist = getDistance();
+      pinchPrevMid  = getMidpoint();
+      pinchPrevAng  = getAngle();
+    }
+    e.preventDefault();
+  }, { passive:false });
+
+  cvs.addEventListener('pointermove', (e)=>{
+    if (inputLocked()) return;
+    if (!pointers.has(e.pointerId)) return;
+
+    const p = pointers.get(e.pointerId);
+    const px = p.x, py = p.y;
+    p.x = e.clientX; p.y = e.clientY;
+
+    const count = pointers.size;
+
+    if (count === 1){
+      const dx = p.x - px, dy = p.y - py;
+      switch (p.mode) {
+        case 'pan':   panDelta(dx, dy); break;
+        case 'twist': orbitTwist(dx * TWIST_SENS_MOUSE); break;
+        default:      orbitDelta(dx, dy, p.ptype !== 'mouse');
+      }
+    } else if (count === 2){
+      // === sempre calcule 'mid' primeiro ===
+      const mid  = getMidpoint();
+
+      // === PINCH ZOOM (MOBILE) com deadzone + inversão natural ===
+      const dist = getDistance();
+      if (pinchPrevDist > 0 && dist > 0){
+        const raw = dist / pinchPrevDist;
+        const logDelta = Math.log(raw);
+        if (Math.abs(logDelta) > 0.003){
+          let scale = Math.pow(raw, 0.85);
+          scale = Math.max(0.8, Math.min(1.25, scale));
+          // mobile “natural”: pinçar para fora => zoom IN
+          scale = 1 / scale;
+          zoomDelta({ scale }, true);
+        }
+      }
+      pinchPrevDist = dist;
+
+      // === PAN do centro (suave) ===
+      const midPrev = pinchPrevMid;
+      if (midPrev && mid){
+        const mdx = mid.x - midPrev.x;
+        const mdy = mid.y - midPrev.y;
+        if (mdx || mdy) panDelta(mdx, mdy);
+      }
+      pinchPrevMid  = mid;
+
+      // === TWIST 2 dedos (ângulo) ===
+      const ang = getAngle();
+      let dAng = ang - pinchPrevAng;
+      if (dAng >  Math.PI) dAng -= 2*Math.PI;
+      if (dAng < -Math.PI) dAng += 2*Math.PI;
+      if (Math.abs(dAng) > 1e-4) orbitTwist(-dAng);
+      pinchPrevAng = ang;
+    }
+
+    e.preventDefault();
+  }, { passive:false });
+
+  const clearPointer = (e)=>{
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2){
+      pinchPrevDist = 0;
+      pinchPrevMid  = null;
+      pinchPrevAng  = 0;
+    }
+  };
+  cvs.addEventListener('pointerup', clearPointer,        { passive:true });
+  cvs.addEventListener('pointercancel', clearPointer,    { passive:true });
+  cvs.addEventListener('lostpointercapture', clearPointer, { passive:true });
+
+  // 5) Wheel (mouse/trackpad) = zoom com foco no ponteiro
+  cvs.addEventListener('wheel', (e) => {
+    markInteracted();
+    if (inputLocked()) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const unit = (e.deltaMode === 1) ? 33 : (e.deltaMode === 2) ? 120 : 1;
+    const dy   = e.deltaY * unit;
+
+    const isTrackpadPinch = (e.ctrlKey || e.metaKey);
+    const k = isTrackpadPinch ? +0.008 : -0.008;
+    let scale = Math.exp(dy * k);
+    scale = Math.max(0.75, Math.min(1.35, scale));
+
+    // NDC do ponteiro
+    const r = cvs.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width;
+    const y = (e.clientY - r.top)  / r.height;
+    const ndc = { x: x * 2 - 1, y: -(y * 2 - 1) };
+
+    zoomDelta({ scale, focusNDC: ndc }, /*isPinch=*/isTrackpadPinch);
+  }, { passive:false });
+
+  // Necessário para twist com right-drag
+  cvs.addEventListener('contextmenu', e => e.preventDefault(), { passive:false });
 }
