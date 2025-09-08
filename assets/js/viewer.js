@@ -299,13 +299,13 @@ window.addEventListener('keyup', (e) => {
 function wireUnifiedInput(){
   const cvs = getCanvas();
   // Só focar no ponteiro se o zoom realmente mudar o radius
-function willZoomApply(scale){
-  const r = Number(State.radius) || 20;
-  const rMin = (window.DOGE?.ZOOM_MIN ?? 4);
-  const rMax = (window.DOGE?.ZOOM_MAX ?? 400);
-  const target = Math.min(rMax, Math.max(rMin, r * scale));
-  return Math.abs(target - r) > 1e-3;
-}
+  function willZoomApply(scale){
+    const r = Number(State.radius) || 20;
+    const rMin = (window.DOGE?.ZOOM_MIN ?? 4);
+    const rMax = (window.DOGE?.ZOOM_MAX ?? 400);
+    const target = Math.min(rMax, Math.max(rMin, r * scale));
+    return Math.abs(target - r) > 1e-3;
+  }
 
   if (!cvs) return;
 
@@ -499,24 +499,21 @@ function willZoomApply(scale){
         default:      orbitDelta(dx, dy, p.ptype !== 'mouse');
       }
     } else if (count === 2){
-      // pinch zoom (tela)
+      // === CORREÇÃO: calcule 'mid' ANTES de usá-lo ===
+      const mid  = getMidpoint();
+
+      // pinch zoom (tela) — comportamento antigo (sem foco no ponteiro)
       const dist = getDistance();
       if (pinchPrevDist > 0 && dist > 0){
         let scale = dist / pinchPrevDist;
         const exponent = 0.85;
         scale = Math.pow(scale, exponent);
         scale = Math.max(0.8, Math.min(1.25, scale));
-          const r = cvs.getBoundingClientRect();
-  const x = (mid.x - r.left) / r.width;
-  const y = (mid.y - r.top)  / r.height;
-  const ndc = { x: x * 2 - 1, y: -(y * 2 - 1) };
-
-  zoomDelta({ scale, focusNDC: ndc }, true);
+        zoomDelta({ scale }, true); // <<< sem focusNDC no mobile
       }
       pinchPrevDist = dist;
 
-      // pan do centro
-      const mid  = getMidpoint();
+      // pan do centro (usa 'mid' agora corretamente definido)
       if (pinchPrevMid && mid){
         const mdx = mid.x - pinchPrevMid.x;
         const mdy = mid.y - pinchPrevMid.y;
@@ -554,61 +551,52 @@ function willZoomApply(scale){
     clearPointer(e);
   }, { passive:true });
 
-
   // ——— helpers para decidir se o zoom muda o raio e em que direção
-const ZOOM_MIN = 4, ZOOM_MAX = 400;      // mantenha iguais ao scene.js
-const EPS = 1e-4;
-
-function nextRadiusIf(scale){
-  const r0 = Number(State.radius) || 20;
-  const r1 = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, r0 * scale));
-  return { r0, r1, delta: r1 - r0 };
-}
-
-function shouldFocusPointer(scale){
-  const { r0, r1, delta } = nextRadiusIf(scale);
-  if (Math.abs(delta) < EPS) return false;               // não vai mudar nada
-  // Se está colado no mínimo e ainda tenta aproximar (zoom-in), não foca
-  if (r0 <= ZOOM_MIN + 1e-3 && r1 <= r0) return false;
-  // Se está colado no máximo e ainda tenta afastar (zoom-out), não foca
-  if (r0 >= ZOOM_MAX - 1e-3 && r1 >= r0) return false;
-  return true;
-}
+  const ZOOM_MIN = 4, ZOOM_MAX = 400;
+  const EPS = 1e-4;
+  function nextRadiusIf(scale){
+    const r0 = Number(State.radius) || 20;
+    const r1 = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, r0 * scale));
+    return { r0, r1, delta: r1 - r0 };
+  }
+  function shouldFocusPointer(scale){
+    const { r0, r1, delta } = nextRadiusIf(scale);
+    if (Math.abs(delta) < EPS) return false;
+    if (r0 <= ZOOM_MIN + 1e-3 && r1 <= r0) return false;
+    if (r0 >= ZOOM_MAX - 1e-3 && r1 >= r0) return false;
+    return true;
+  }
 
   // ───────────────────────────────────────────────────────────────
-  // 5) Wheel (mouse/trackpad) = zoom
-  //    INVERTIDO SÓ PARA PINCH DO TOUCHPAD (ctrl/meta true)
+  // 5) Wheel (mouse/trackpad) = zoom com foco no ponteiro (mantido)
   // ───────────────────────────────────────────────────────────────
-cvs.addEventListener('wheel', (e) => {
-  if (inputLocked()) return;
+  cvs.addEventListener('wheel', (e) => {
+    if (inputLocked()) return;
 
-  e.preventDefault();
-  e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
 
-  const unit = (e.deltaMode === 1) ? 33 : (e.deltaMode === 2) ? 120 : 1;
-  const dy   = e.deltaY * unit;
+    const unit = (e.deltaMode === 1) ? 33 : (e.deltaMode === 2) ? 120 : 1;
+    const dy   = e.deltaY * unit;
 
-  // Pinch do touchpad (Chromium/Firefox sinalizam ctrl/meta):
-  // invertido para: afastar dedos => zoom IN (mantém seu ajuste)
-  const isTrackpadPinch = (e.ctrlKey || e.metaKey);
-  const k = isTrackpadPinch ? +0.008 : -0.008;
-  let scale = Math.exp(dy * k);
-  scale = Math.max(0.75, Math.min(1.35, scale));
+    // Pinch do touchpad (Chromium/Firefox sinalizam ctrl/meta):
+    // invertido para: afastar dedos => zoom IN (mantém seu ajuste)
+    const isTrackpadPinch = (e.ctrlKey || e.metaKey);
+    const k = isTrackpadPinch ? +0.008 : -0.008;
+    let scale = Math.exp(dy * k);
+    scale = Math.max(0.75, Math.min(1.35, scale));
 
-  // NDC do ponteiro
-  const r = cvs.getBoundingClientRect();
-  const x = (e.clientX - r.left) / r.width;
-  const y = (e.clientY - r.top)  / r.height;
-  const ndc = { x: x * 2 - 1, y: -(y * 2 - 1) };
+    // NDC do ponteiro
+    const r = cvs.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width;
+    const y = (e.clientY - r.top)  / r.height;
+    const ndc = { x: x * 2 - 1, y: -(y * 2 - 1) };
 
-  // Agora o foco no ponteiro é aplicado DENTRO do zoomDelta (suave e sem drift)
-  zoomDelta({ scale, focusNDC: ndc }, /*isPinch=*/isTrackpadPinch);
-}, { passive:false });
-
-
-
-
+    // Foco no ponteiro é aplicado dentro do zoomDelta (suave/sem drift)
+    zoomDelta({ scale, focusNDC: ndc }, /*isPinch=*/isTrackpadPinch);
+  }, { passive:false });
 
   // Necessário para twist com right-drag
   cvs.addEventListener('contextmenu', e => e.preventDefault(), { passive:false });
 }
+
