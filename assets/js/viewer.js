@@ -1,7 +1,7 @@
 // ============================
 // Entry do Viewer DOGE
 // ============================
-
+import * as THREE from 'three';
 import { initTooltip } from './utils.js';
 import { State } from './state.js';
 import { loadAllData, layoutData } from './data.js';

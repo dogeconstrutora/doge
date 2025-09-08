@@ -1,7 +1,7 @@
 // ============================
 // Geometria / Torre 3D (surface mesh por NOME, igual ao viewer)
 // ============================
-
+import * as THREE from 'three';
 import { State } from './state.js';
 import { scene, syncOrbitTargetToModel} from './scene.js';
 import { pickFVSColor } from './colors.js';
@@ -570,7 +570,7 @@ export function getTorre(){
 
 // =============== HIGHLIGHT HELPERS (hover/selected) ===============
 export function ensureEdgeMats(group, THREERef) {
-  const THREE = THREERef || window.THREE;
+  //const THREE = THREERef || window.THREE;
   if (!group || !group.userData || !group.userData.edges) return;
 
   if (!group.userData.__edgeMatBase) {

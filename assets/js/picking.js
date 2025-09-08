@@ -1,7 +1,7 @@
 // ============================
 // Picking (raycast), Hover (tooltip) e Seleção
 // ============================
-
+import * as THREE from 'three';
 import { State } from './state.js';
 import { showTip, hideTip } from './utils.js';
 import { pickFVSColor } from './colors.js';

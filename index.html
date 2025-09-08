@@ -5,8 +5,21 @@
   <title>Acompanhamento de Serviços - DOGE Construtora</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 
-  <!-- CSS externo -->
+  <!-- CSS -->
   <link rel="stylesheet" href="./assets/css/style.css" />
+
+  <!-- (Opcional p/ compatibilidade ampla — iOS < 16.4, alguns Androids) -->
+  <script async src="https://unpkg.com/es-module-shims@1.10.0/dist/es-module-shims.min.js"></script>
+
+  <!-- Import map: usa Three.js em ESM e addons -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
   <!-- Canvas 3D + overlay 2D -->
@@ -32,16 +45,15 @@
   <!-- HUD (rodapé) -->
   <div id="hud">
     <!-- handle (toggle do HUD) -->
-     <button id="btnHudSettings" class="hud-dot" title="Configurações" aria-label="Configurações"></button>
+    <button id="btnHudSettings" class="hud-dot" title="Configurações" aria-label="Configurações"></button>
     <div class="row handle" id="hudHandle" title="Mostrar/ocultar">
-            <div class="grabber" aria-hidden="true"></div>
+      <div class="grabber" aria-hidden="true"></div>
     </div>
 
     <!-- 1ª linha: FVS + NC + 2D (+ Zoom 2D aparece só no modo 2D) -->
     <div class="row hud-row-1" id="row-fvs">
       <!-- Corte por pavimento -->
-
-        <span id="floorLimitValue" class="hud-value">—all—</span>
+      <span id="floorLimitValue" class="hud-value">—all—</span>
 
       <select id="fvsSelect" aria-label="Selecionar FVS">
         <option value="">Carregando...</option>
@@ -63,8 +75,8 @@
     <div class="row hud-row-2 nowrap" id="row-sliders">
       <!--<label for="opacity" title="Opacidade">🌫️</label>
       //<input id="opacity" type="range" min="0" max="100" value="100" class="slim" />-->
-          <label for="floorLimit" title="Explodir por piso (Y)">🪜</label>
-        <input id="floorLimit" type="range" min="0" max="1" step="1" value="0" class="slim">
+      <label for="floorLimit" title="Explodir por piso (Y)">🪜</label>
+      <input id="floorLimit" type="range" min="0" max="1" step="1" value="0" class="slim">
       <label for="explodeXY" title="Explodir XY">⤢</label>
       <input id="explodeXY" type="range" min="0" max="4" step="0.01" value="0" class="slim" />
 
@@ -76,12 +88,7 @@
     </div>
   </div>
 
-  <!-- THREE core -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-
-  <!-- App (módulos ES) -->
+  <!-- App (ES Modules) -->
   <script type="module" src="./assets/js/viewer.js"></script>
 </body>
 </html>
-
-

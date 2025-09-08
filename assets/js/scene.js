@@ -1,7 +1,7 @@
 // ============================
 // Cena 3D / Câmera / Renderer
 // ============================
-
+import * as THREE from 'three';
 import { State } from './state.js';
 
 export let scene, renderer, camera;
