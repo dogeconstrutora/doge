@@ -86,11 +86,17 @@ function installBackdropObserver() {
     loading?.classList.remove('hidden');
 
     await loadAllData();
+// Inicializa namespace DOGE e flags globais
 window.DOGE ||= {};
 window.DOGE.USE_VIEWER_POINTERS = true;
-window.DOGE.__userInteracted = false; // <<< ADD: flag global
+window.DOGE.__userInteracted = false;   // flag inicial para watchdog
 
-    initScene();
+// Failsafe: garante que qualquer interação global marque como "já interagiu"
+["pointerdown","touchstart","wheel","gesturestart"].forEach(ev=>{
+  window.addEventListener(ev, ()=>{ window.DOGE.__userInteracted = true; }, { passive:true });
+});
+
+initScene();
     installDebugSpies(); // <<< ADICIONE ESTA LINHA
 
     // === DEBUG SPIES: loga qualquer write em State.radius e set() do orbitTarget ===
@@ -156,10 +162,10 @@ function installDebugSpies() {
     requestAnimationFrame(()=>{
       // Faz UM único fit e salva como Home
       syncOrbitTargetToModel({ saveAsHome: true, animate: false });
-      resetRotation();
+      resetRotation(); // deixa "em pé"
       render();
 
-      // --- Watchdog 1.2s: somente para evitar corte de topo,
+      // --- Watchdog 1.2s: apenas evita "corte de topo"
       //     e DESLIGA ao primeiro input do usuário
       const T_GUARD = 1200;
       const t0 = performance.now();
@@ -183,10 +189,10 @@ function installDebugSpies() {
       function guardTick(){
         const dt = performance.now() - t0;
 
-        // se o usuário já interagiu, encerra o guard
+        // se já houve QUALQUER interação do usuário, encerra o guard
         if (window.DOGE?.__userInteracted) return;
 
-        // apenas protege contra "corte de topo" na janela inicial
+        // só corrige se o topo cortar (nada de "drift" de alvo/raio)
         const scr = worldTopToScreen();
         const cutTop = scr && scr.y < 0;
         if (cutTop) {
