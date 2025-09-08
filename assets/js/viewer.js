@@ -298,6 +298,8 @@ window.addEventListener('keyup', (e) => {
 // ============================
 function wireUnifiedInput(){
   const cvs = getCanvas();
+  if (!cvs) return;
+
   // Só focar no ponteiro se o zoom realmente mudar o radius
   function willZoomApply(scale){
     const r = Number(State.radius) || 20;
@@ -306,8 +308,6 @@ function wireUnifiedInput(){
     const target = Math.min(rMax, Math.max(rMin, r * scale));
     return Math.abs(target - r) > 1e-3;
   }
-
-  if (!cvs) return;
 
   const dbg = (tag, o) => { if (window.DOGE?.debugZoom) console.debug(tag, o||''); };
 
@@ -323,15 +323,9 @@ function wireUnifiedInput(){
     };
 
     const onWheelCapture = (ev) => {
-      // pinch do touchpad (Chromium/Firefox) sinaliza ctrl/meta — só usamos para BLOQUEAR page-zoom
-      if ((ev.ctrlKey || ev.metaKey) && inCanvasByPoint(ev)) {
-        ev.preventDefault();
-      }
+      if ((ev.ctrlKey || ev.metaKey) && inCanvasByPoint(ev)) ev.preventDefault();
     };
-
-    const onGestureCapture = (ev) => { // Safari/macOS
-      if (inCanvasByPoint(ev)) ev.preventDefault();
-    };
+    const onGestureCapture = (ev) => { if (inCanvasByPoint(ev)) ev.preventDefault(); };
 
     document.addEventListener('wheel',         onWheelCapture,    { passive:false, capture:true });
     document.addEventListener('gesturestart',  onGestureCapture,  { passive:false, capture:true });
@@ -356,9 +350,12 @@ function wireUnifiedInput(){
 
     if (typeof e.scale === 'number' && e.scale > 0) {
       let factor = e.scale / (_gPrevScale || 1);
-      factor = Math.max(0.8, Math.min(1.25, factor));
-      dbg('[DOGE:zoom][gesturechange]', {factor});
-      zoomDelta({ scale: factor }, /*isPinch=*/true);
+      // deadzone leve para não “tremer” durante pan
+      if (Math.abs(Math.log(factor)) > 0.003){
+        factor = Math.max(0.8, Math.min(1.25, Math.pow(factor, 0.85)));
+        // Safari também segue regra mobile: pinçar para fora => zoom IN
+        zoomDelta({ scale: 1 / factor }, /*isPinch=*/true);
+      }
       _gPrevScale = e.scale;
     }
     if (typeof e.rotation === 'number') {
@@ -455,6 +452,7 @@ function wireUnifiedInput(){
   };
 
   cvs.addEventListener('pointerdown', (e)=>{
+    // failsafe: se o modal fechou mas ficou lock, solta
     if (!isModalOpen() && window.DOGE && window.DOGE.inputLocked) {
       window.DOGE.inputLocked = false;
       const pe = getComputedStyle(cvs).pointerEvents;
@@ -464,8 +462,12 @@ function wireUnifiedInput(){
     if (getComputedStyle(cvs).pointerEvents !== 'auto') cvs.style.pointerEvents = 'auto';
 
     window.DOGE.__inputDbg.cntDown++;
-    cvs.setPointerCapture?.(e.pointerId);
-    window.DOGE.__inputDbg.captures.add(e.pointerId);
+
+    // ⚠️ Pointer capture SOMENTE para mouse. Em iOS/Android pode atrapalhar multi-touch.
+    if (e.pointerType === 'mouse') {
+      cvs.setPointerCapture?.(e.pointerId);
+      window.DOGE.__inputDbg.captures.add(e.pointerId);
+    }
 
     pointers.set(e.pointerId, {
       x: e.clientX, y: e.clientY,
@@ -499,21 +501,26 @@ function wireUnifiedInput(){
         default:      orbitDelta(dx, dy, p.ptype !== 'mouse');
       }
     } else if (count === 2){
-      // === CORREÇÃO: calcule 'mid' ANTES de usá-lo ===
+      // === sempre calcule 'mid' primeiro ===
       const mid  = getMidpoint();
 
-      // pinch zoom (tela) — comportamento antigo (sem foco no ponteiro)
+      // === PINCH ZOOM (MOBILE) com deadzone + inversão natural ===
       const dist = getDistance();
       if (pinchPrevDist > 0 && dist > 0){
-        let scale = dist / pinchPrevDist;
-        const exponent = 0.85;
-        scale = Math.pow(scale, exponent);
-        scale = Math.max(0.8, Math.min(1.25, scale));
-        zoomDelta({ scale }, true); // <<< sem focusNDC no mobile
+        const raw = dist / pinchPrevDist;
+        const logDelta = Math.log(raw);
+        // deadzone evita “tremidos” quando o gesto é na verdade pan
+        if (Math.abs(logDelta) > 0.003){
+          let scale = Math.pow(raw, 0.85);
+          scale = Math.max(0.8, Math.min(1.25, scale));
+          // ✔️ mobile “natural”: pinçar para fora => zoom IN
+          scale = 1 / scale;
+          zoomDelta({ scale }, true);
+        }
       }
       pinchPrevDist = dist;
 
-      // pan do centro (usa 'mid' agora corretamente definido)
+      // === PAN do centro (suave) ===
       if (pinchPrevMid && mid){
         const mdx = mid.x - pinchPrevMid.x;
         const mdy = mid.y - pinchPrevMid.y;
@@ -521,7 +528,7 @@ function wireUnifiedInput(){
       }
       pinchPrevMid  = mid;
 
-      // twist 2 dedos
+      // === TWIST 2 dedos (ângulo) ===
       const ang = getAngle();
       let dAng = ang - pinchPrevAng;
       if (dAng >  Math.PI) dAng -= 2*Math.PI;
@@ -551,22 +558,6 @@ function wireUnifiedInput(){
     clearPointer(e);
   }, { passive:true });
 
-  // ——— helpers para decidir se o zoom muda o raio e em que direção
-  const ZOOM_MIN = 4, ZOOM_MAX = 400;
-  const EPS = 1e-4;
-  function nextRadiusIf(scale){
-    const r0 = Number(State.radius) || 20;
-    const r1 = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, r0 * scale));
-    return { r0, r1, delta: r1 - r0 };
-  }
-  function shouldFocusPointer(scale){
-    const { r0, r1, delta } = nextRadiusIf(scale);
-    if (Math.abs(delta) < EPS) return false;
-    if (r0 <= ZOOM_MIN + 1e-3 && r1 <= r0) return false;
-    if (r0 >= ZOOM_MAX - 1e-3 && r1 >= r0) return false;
-    return true;
-  }
-
   // ───────────────────────────────────────────────────────────────
   // 5) Wheel (mouse/trackpad) = zoom com foco no ponteiro (mantido)
   // ───────────────────────────────────────────────────────────────
@@ -579,24 +570,22 @@ function wireUnifiedInput(){
     const unit = (e.deltaMode === 1) ? 33 : (e.deltaMode === 2) ? 120 : 1;
     const dy   = e.deltaY * unit;
 
-    // Pinch do touchpad (Chromium/Firefox sinalizam ctrl/meta):
-    // invertido para: afastar dedos => zoom IN (mantém seu ajuste)
     const isTrackpadPinch = (e.ctrlKey || e.metaKey);
     const k = isTrackpadPinch ? +0.008 : -0.008;
     let scale = Math.exp(dy * k);
     scale = Math.max(0.75, Math.min(1.35, scale));
 
-    // NDC do ponteiro
+    // NDC do ponteiro (desktop/trackpad)
     const r = cvs.getBoundingClientRect();
     const x = (e.clientX - r.left) / r.width;
     const y = (e.clientY - r.top)  / r.height;
     const ndc = { x: x * 2 - 1, y: -(y * 2 - 1) };
 
-    // Foco no ponteiro é aplicado dentro do zoomDelta (suave/sem drift)
     zoomDelta({ scale, focusNDC: ndc }, /*isPinch=*/isTrackpadPinch);
   }, { passive:false });
 
   // Necessário para twist com right-drag
   cvs.addEventListener('contextmenu', e => e.preventDefault(), { passive:false });
 }
+
 
