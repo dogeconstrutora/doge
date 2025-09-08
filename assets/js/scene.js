@@ -114,7 +114,7 @@ export function initScene() {
 
   applyOrbitToCamera();
 
-  setupUnifiedTouchGestureHandler(cvs);
+  //setupUnifiedTouchGestureHandler(cvs);
   startAutoFitOnce(); // calcula pivô fixo + Home (não roda se Home já existir)
 
   return { scene, renderer, camera };
