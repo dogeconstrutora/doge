@@ -11,6 +11,28 @@ let lastFocused = null;
 // protege contra “clique fantasma” ao abrir
 let _modalJustOpenedAt = 0;
 
+// 🔒 trava global de input enquanto o modal está aberto
+function setInputLock(on) {
+  if (!window.DOGE) window.DOGE = {};
+  window.DOGE.inputLocked = !!on;
+}
+function getCanvas(){
+  return document.getElementById('doge-canvas') || document.querySelector('#app canvas');
+}
+function releaseAllCanvasCaptures() {
+  const cvs = getCanvas();
+  const dbg = window.DOGE?.__inputDbg;
+  if (!cvs || !dbg) return;
+  if (dbg.captures && cvs.releasePointerCapture) {
+    for (const id of Array.from(dbg.captures)) {
+      try { cvs.releasePointerCapture(id); } catch {}
+    }
+    dbg.captures.clear?.();
+  }
+  // limpa ponteiros em movimento no viewer para não “acordarem” depois
+  try { dbg.pointers?.clear?.(); } catch {}
+}
+
 // ---------------
 // Inicialização
 // ---------------
@@ -54,61 +76,58 @@ export function initModal(){
       e.preventDefault();
     }
   }
-  // captura: garante que roda antes de qualquer outro handler
   backdrop.addEventListener('click',        suppressGhostClick, true);
-  modal.addEventListener('click',           suppressGhostClick, true);
+  // Qualquer botão/link com semântica de cancel deve fechar o modal
+modal.addEventListener('click', (e) => {
+  const el = e.target.closest?.('[data-modal-cancel], .js-modal-cancel, #doge-modal-cancel, [data-dismiss="modal"]');
+  if (!el) return;
+  e.preventDefault();
+  closeModal();
+}, { passive: false });
+
   backdrop.addEventListener('pointerdown',  suppressGhostClick, true);
   modal.addEventListener('pointerdown',     suppressGhostClick, true);
 }
 
-/**
- * Extrai o texto entre "Pavimento XX - " e o próximo " - ".
- * Ex.: "Torre A - Pavimento 03 - Apartamento 301 - Banheiro" -> "Apartamento 301"
- * Se o padrão não existir, devolve o texto original.
- */
 // ---------------
 // API pública
 // ---------------
-
-/**
- * Abre o modal de apartamento (estilo viewer.html)
- * @param {Object} opts
- * @param {string} opts.id
- * @param {string|number|null} [opts.floor]
- * @param {Object|null} [opts.row]
- * @param {string|null} [opts.tintHex] - cor do card (#rrggbb)
- */
 export function openAptModal({ id, floor=null, row=null, tintHex=null }){
   if (!modal || !backdrop) return;
 
   lastFocused = document.activeElement;
 
-  const aptName = String(id || '').trim();            // nome completo do layout-3d.json
+  const aptName = String(id || '').trim();
   const aptKey  = normAptoId(aptName);
 
-  // 🔒 Título: aplica a REGRA pedida (entre "Pavimento XX - " e o próximo " - ")
+  // Título (regra Pavimento XX - ... - ... )
   const aptNameForTitle = extractBetweenPavimentoAndNextDash(aptName) || 'Apartamento';
   titleEl.textContent = aptNameForTitle;
 
-  // Pill curto (igual viewer): mostra Duração OU Progresso
+  // Pill curto
   const pill = buildHeaderPill(row);
   pillEl.textContent = pill;
 
-  // Tint do modal (usa a mesma cor do card)
+  // Tint
   if (!tintHex){
     tintHex = State.COLOR_MAP?.colors?.[aptKey] || State.COLOR_MAP?.default || '#6e7681';
   }
   applyModalTint(tintHex);
 
-  // Conteúdo (estrutura e regras 1:1 com viewer.html)
+  // Conteúdo
   renderModalContent({ row });
+
+  // --- Antes de mostrar: desabilita canvas e SOLTA CAPTURES existentes
+  const canvas = getCanvas();
+  if (canvas) {
+    canvas.style.pointerEvents = 'none';
+    releaseAllCanvasCaptures();
+  }
 
   // Mostrar
   backdrop.classList.add('show');
   backdrop.setAttribute('aria-hidden','false');
-
-  // 🔔 avisa o viewer que o modal abriu (desativa input do canvas, etc.)
-  window.dispatchEvent(new CustomEvent('doge:modal:open'));
+  setInputLock(true); // 🔒 trava input no viewer enquanto aberto
 
   setTimeout(()=> closeBtn?.focus(), 0);
 
@@ -120,24 +139,21 @@ export function openAptModal({ id, floor=null, row=null, tintHex=null }){
     backdrop.style.pointerEvents = 'auto';
     modal.style.pointerEvents = 'auto';
   }));
-
-  // Desabilita eventos no canvas 3D enquanto o modal está aberto
-  const canvas = document.querySelector('#app canvas');
-  if (canvas) canvas.style.pointerEvents = 'none';
 }
 
-/** Fecha o modal e restaura foco */
 export function closeModal(){
   if (!backdrop) return;
+
   backdrop.classList.remove('show');
   backdrop.setAttribute('aria-hidden','true');
 
-  // reabilita canvas 3D
-  const canvas = document.querySelector('#app canvas');
-  if (canvas) canvas.style.pointerEvents = 'auto';
-
-  // 🔔 avisa o viewer que o modal fechou (reset hard do input, etc.)
-  window.dispatchEvent(new CustomEvent('doge:modal:close'));
+  // reabilita canvas 3D e garante que não restou capture
+  const canvas = getCanvas();
+  if (canvas) {
+    canvas.style.pointerEvents = 'auto';
+    releaseAllCanvasCaptures();
+  }
+  setInputLock(false); // 🔓 libera input do viewer
 
   if (lastFocused && typeof lastFocused.focus === 'function'){
     setTimeout(()=> lastFocused.focus(), 0);
@@ -158,14 +174,12 @@ export function applyModalTint(hex){
 function renderModalContent({ row }){
   if (!contentEl) return;
 
-  // Sem dados → mensagem simples (igual viewer)
   if (!row){
     pillEl.textContent = '';
     contentEl.innerHTML = `<p>Sem dados para este apartamento.</p>`;
     return;
   }
 
-  // ===== Campos usados (mesmos nomes do viewer.html) =====
   const pct        = num(row.percentual_ultima_inspecao);
   const pendUlt    = int(row.qtd_pend_ultima_inspecao);
   const ncUlt      = int(row.qtd_nao_conformidades_ultima_inspecao);
@@ -177,36 +191,25 @@ function renderModalContent({ row }){
   const terminoIni = row.data_termino_inicial ? formatDateBR(row.data_termino_inicial) : null;
   const terminoFin = row.termino_final ? formatDateBR(row.termino_final) : null;
 
-  // Pill curto (igual viewer): mostra Duração OU Progresso
   pillEl.textContent = (row.duracao_real != null)
     ? `Duração: ${int(row.duracao_real)} dia${int(row.duracao_real)===1 ? '' : 's'}`
     : (row.percentual_ultima_inspecao != null ? `Progresso: ${int(row.percentual_ultima_inspecao)}%` : '');
 
-  // link para última inspeção (igual viewer)
   const idLink  = row.id_ultima_inspecao || row.id;
   const inmetaUrl = idLink
     ? `https://app.inmeta.com.br/app/360/servico/inspecoes/realizadas?inspecao=${encodeURIComponent(idLink)}`
     : null;
 
-  // ===== Barra de progresso — sempre que houver percentual, com a cor certa =====
   let progressColorCSS = null;
   if (Number.isFinite(pct)) {
-    if (!row.data_termino_inicial) {
-      // em andamento → azul
-      progressColorCSS = 'var(--blue)';
-    } else if ((pendUlt > 0) || (ncUlt > 0) || pct < 100) {
-      // terminou inicial mas ainda há pend/NC ou pct<100 → amarelo
-      progressColorCSS = 'var(--yellow)';
-    } else {
-      // concluído 100% sem pend/NC → verde
-      progressColorCSS = 'var(--green)';
-    }
+    if (!row.data_termino_inicial) progressColorCSS = 'var(--blue)';
+    else if ((pendUlt > 0) || (ncUlt > 0) || pct < 100) progressColorCSS = 'var(--yellow)';
+    else progressColorCSS = 'var(--green)';
   }
   const progressMarkup = (Number.isFinite(pct) && progressColorCSS)
     ? linearProgress(pct, progressColorCSS)
     : '';
 
-  // ===== Reaberturas (lista/tabela) =====
   const reabArr = Array.isArray(row.reaberturas) ? row.reaberturas.slice() : [];
   if (reabArr.length){
     reabArr.sort((a,b)=>{
@@ -217,9 +220,7 @@ function renderModalContent({ row }){
     });
   }
 
-  // ===== HTML =====
   let html = '';
-
   html += `<p><strong>Apartamento:</strong> ${row?.nome ?? row?.apartamento ?? '—'}</p>`;
   if (row.pavimento_origem){
     html += `<p><strong>Pavimento origem:</strong> ${row.pavimento_origem}</p>`;
@@ -252,7 +253,7 @@ function renderModalContent({ row }){
     html += `
       <p>
         <a class="link-row" href="${inmetaUrl}" target="_blank" rel="noopener noreferrer">
-          <span><strong>Última inspeção:</strong> código ${row.codigo_ultima_inspecao ?? row.codigo ?? '—'} | 
+          <span><strong>Última inspeção:</strong> código ${row.codigo_ultima_inspecao ?? row.codigo ?? '—'} |
           Pendências ${pendUlt ?? '-'}${(ncUlt!=null)?` | NC ${ncUlt}`:''}</span>
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -271,7 +272,6 @@ function renderModalContent({ row }){
 
   contentEl.innerHTML = html;
 
-  // anima barra de progresso (mesma rotina do viewer)
   animateProgressBars(contentEl);
 }
 
@@ -293,7 +293,6 @@ function buildHeaderPill(row){
 
 function linearProgress(percent, colorCSSVar){
   const p = Math.max(0, Math.min(100, Math.round(Number(percent)||0)));
-  // usa currentColor para a barra; o span externo recebe a cor
   return `
     <span class="q-linear-progress" style="color:${colorCSSVar}">
       <span class="q-linear-progress__track">
@@ -308,7 +307,6 @@ function animateProgressBars(root=document){
   requestAnimationFrame(()=> bars.forEach(b => { b.style.width = b.dataset.w; }));
 }
 
-// números
 function num(v){
   if (v==null || v==='') return NaN;
   const s = String(v).replace(',', '.');

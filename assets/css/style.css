@@ -30,16 +30,10 @@ body{
 canvas{ display:block; }
 
 /* quando o 2D está ativo, permita blur do conteúdo “atrás” do overlay */
-body.grid2d-on #overlay2d {
-  /* se seu overlay tiver um fundo semi-transparente, o backdrop-filter entra bonito */
-  backdrop-filter: blur(2px);
-}
+body.grid2d-on #overlay2d { backdrop-filter: blur(2px); }
 
 /* (opcional) garante que o overlay esteja acima do canvas */
-#overlay2d {
-  position: fixed;
-  z-index: 50; /* já estava no JS, aqui só reforça */
-}
+#overlay2d { position: fixed; z-index: 50; }
 
 /* O canvas usa gestos 100% custom → desabilita gestos nativos */
 #app canvas{ touch-action: none; }
@@ -188,7 +182,6 @@ body.grid2d-on #overlay2d {
   display:flex; align-items:center; gap:8px; margin:0px;
   flex-wrap: wrap;
 }
-/* use .nowrap nas linhas de sliders no HTML */
 #hud .row.nowrap{ flex-wrap: nowrap; }
 
 #hud .handle{ display:flex; align-items:center; gap:0px; user-select:none; cursor:pointer; margin:0px }
@@ -208,16 +201,12 @@ body.grid2d-on #overlay2d {
 }
 /* aumenta a altura e a área de toque da linha 3 (sliders) */
 #hud .hud-row-3 {
-  min-height: 44px;       /* altura mínima confortável para o dedo */
-  padding: 6px 0;         /* mais espaço em cima/baixo */
-  align-items: center;    /* garante centralização vertical */
+  min-height: 44px;
+  padding: 6px 0;
+  align-items: center;
 }
-#hud .hud-row-3 input[type="range"] {
-  height: 6px;            /* engrossa a barrinha */
-}
-#hud .hud-row-3 label {
-  font-size: 16px;        /* deixa o emoji/ícone um pouco maior */
-}
+#hud .hud-row-3 input[type="range"] { height: 6px; }
+#hud .hud-row-3 label { font-size: 16px; }
 
 /* Sliders compactos + alinhamento com emoji */
 #hud input[type="range"]{
@@ -226,7 +215,6 @@ body.grid2d-on #overlay2d {
   display:inline-block;
   vertical-align:middle;
 }
-
 #hud input[type="range"].slim::-webkit-slider-runnable-track{ height: 4px; }
 #hud input[type="range"].slim::-moz-range-track{ height: 4px; }
 
@@ -259,6 +247,7 @@ body.grid2d-on #overlay2d {
 #btn2D[aria-pressed="true"] ~ #row-fvs #floorLimitValue {
   display: none !important;
 }
+
 /* ===== Botão 2D (estado ativo) ===== */
 :root{ --c-2d-off:#8b949e; --c-2d-on:#ff3b30; }
 #btn2D.mode2d{
@@ -286,7 +275,6 @@ body.grid2d-on #overlay2d {
   border-color: rgba(255,59,48,.55);
 }
 #btn2D.mode2d svg{ width:18px; height:18px; }
-/* estiliza somente o círculo do botão 2D (não interfere nos badges do grid) */
 #btn2D.mode2d .badge{ fill:none; stroke:currentColor; stroke-width:2; opacity:.38; }
 #btn2D.mode2d .label{ fill:currentColor; font:700 13px/1 system-ui,-apple-system,"Segoe UI",Roboto,Inter,Arial; }
 #btn2D[aria-pressed="true"] .badge,
@@ -294,7 +282,6 @@ body.grid2d-on #overlay2d {
   fill: rgba(248,81,73,.18);
   stroke: rgba(248,81,73,.75);
 }
-
 
 /* ===== Botão NC (cor muda quando ativo) ===== */
 #btnNC{
@@ -323,7 +310,6 @@ body.grid2d-on #overlay2d {
 }
 
 /* ===== Dropdown FVS ===== */
-/* (o label já está acima) */
 #fvsSelect{
   appearance:none; -webkit-appearance:none; -moz-appearance:none;
   background: rgba(240,246,252,0.06);
@@ -359,7 +345,7 @@ body.grid2d-on #overlay2d {
   color: #fff;
 }
 
-/* ===== Modal ===== */
+/* ===== Modal (efeito vidro com tinte da FVS) ===== */
 #doge-modal-backdrop{
   position: fixed; inset: 0;
   display: none;
@@ -438,6 +424,58 @@ body.grid2d-on #overlay2d {
 #doge-modal a.link-row:active{ transform: scale(0.99); }
 #doge-modal a.link-row svg{ width:14px; height:14px; stroke:currentColor; }
 
+/* === Formulário dentro do modal === */
+#doge-modal .form-grid {
+  display: grid;
+  gap: 14px;
+  padding: 8px 0;
+}
+#doge-modal .form-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
+}
+#doge-modal .form-grid select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+#doge-modal .form-grid .error-msg {
+  color: #ffd166;
+  font-size: 13px;
+}
+#doge-modal .form-grid .actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+#doge-modal .form-grid .actions button {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(240,246,252,0.06);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color .15s ease, transform .1s ease;
+}
+#doge-modal .form-grid .actions button:hover {
+  background: rgba(240,246,252,0.1);
+}
+#doge-modal .form-grid .actions .btn-apply {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue);
+}
+#doge-modal .form-grid .actions .btn-apply:hover {
+  background: #4697e6;
+}
+
 /* ===== Legend (se usado) ===== */
 #legend{
   position: fixed; right: 10px; top: 10px;
@@ -495,21 +533,19 @@ body.grid2d-on #overlay2d {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: nowrap;   /* 🚫 impede quebra de linha */
+  flex-wrap: nowrap;
 }
 
 /* Dropdown adaptável */
 #hud select {
-  flex-shrink: 1;      /* permite encolher quando faltar espaço */
-  min-width: 80px;     /* não fica menor que isso */
-  max-width: 160px;    /* não cresce demais */
-  width: auto;         /* usa só o espaço necessário */
+  flex-shrink: 1;
+  min-width: 80px;
+  max-width: 160px;
+  width: auto;
 }
 
 /* Botão de configurações no HUD (canto sup. esquerdo do HUD) */
-#hud {
-  position: fixed; /* já deve estar; reforço para posicionar filho absoluto */
-}
+#hud { position: fixed; }
 #btnHudSettings.hud-gear{
   position: absolute;
   top: 6px; left: 8px;
@@ -522,107 +558,18 @@ body.grid2d-on #overlay2d {
   font-size: 14px; line-height: 1;
   display: grid; place-items: center;
   cursor: pointer;
-  z-index: 2; /* acima do conteúdo do HUD */
+  z-index: 2;
 }
-#btnHudSettings.hud-gear:hover {
-  background: rgba(0,0,0,.5);
-}
+#btnHudSettings.hud-gear:hover { background: rgba(0,0,0,.5); }
 #btnHudSettings.hud-gear:focus {
   outline: 2px solid #58a6ff;
   outline-offset: 1px;
 }
 
-/* === Modal: centralizado e responsivo === */
-#doge-modal-backdrop{
-  position: fixed;
-  inset: 0;
-  display: none;                   /* fica visível quando aria-hidden="false" */
-  align-items: center;
-  justify-content: center;
-  padding: 24px;                   /* respiro nas bordas */
-  background: rgba(0,0,0,.5);
-  backdrop-filter: blur(2px);
-  z-index: 50;
-}
-#doge-modal-backdrop[aria-hidden="false"]{
-  display: flex;
-}
-
-#doge-modal{
-  width: min(720px, 100%);
-  max-height: min(86vh, 900px);
-  background: var(--card, #161b22);
-  color: var(--text, #c9d1d9);
-  border: 1px solid var(--border, #30363d);
-  border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0,0,0,.45);
-  overflow: hidden;                /* header fixo + conteúdo rolável */
-  display: flex;
-  flex-direction: column;
-}
-
-#doge-modal header{
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
-  position: sticky; top: 0;
-  background: inherit;
-  border-bottom: 1px solid var(--border, #30363d);
-  z-index: 1;
-}
-#doge-modal .content{
-  padding: 12px 14px;
-  overflow: auto;                  /* rolagem interna do conteúdo */
-  flex: 1;
-}
-
-/* Botão fechar com área de toque confortável */
-#doge-modal .close{
-  margin-left: auto;
-  width: 32px; height: 32px;
-  display: grid; place-items: center;
-  border: 1px solid var(--border, #30363d);
-  background: transparent;
-  color: inherit;
-  border-radius: 8px;
-  cursor: pointer;
-}
-#doge-modal .close:hover{ background: rgba(255,255,255,0.06); }
-#doge-modal .close:focus{ outline: 2px solid #58a6ff; outline-offset: 2px; }
-
-/* Badge/pill opcional */
-#doge-modal .pill{
-  margin-left: 8px;
-  padding: 2px 8px;
-  font-size: 12px;
-  border: 1px solid var(--border, #30363d);
-  border-radius: 999px;
-  background: rgba(255,255,255,.06);
-}
-
-/* Mobile */
-@media (max-width: 520px){
-  #doge-modal-backdrop{ padding: 12px; }
-  #doge-modal{
-    width: 100%;
-    max-height: 92vh;              /* quase tela cheia */
-    border-radius: 10px;
-  }
-  #doge-modal .content{ padding: 12px; }
-}
-
-/* Evita animação excessiva para quem prefere menos movimento */
-@media (prefers-reduced-motion: reduce){
-  #doge-modal-backdrop, #doge-modal{ transition: none !important; }
-}
-
-/* Opcional: bloquear scroll do body quando o modal está aberto */
-body.modal-open{ overflow: hidden; }
 /* ===== Botão de configurações (DOT pequeno) ===== */
 #btnHudSettings.hud-dot{
   position: absolute;
-  top: 12px; left: 12px;          /* canto superior esquerdo do HUD */
+  top: 12px; left: 12px;
   width: 12px; height: 12px;
   border-radius: 999px;
   border: 1px solid rgba(255,199,0,.9);
@@ -668,6 +615,4 @@ body.modal-open{ overflow: hidden; }
 }
 #btnResetAll:active{ transform: scale(0.98); }
 #btnResetAll:focus{ outline:none; }
-#btnResetAll:focus-visible{
-  box-shadow: 0 0 0 2px rgba(88,166,255,.25);
-}
+#btnResetAll:focus-visible{ box-shadow: 0 0 0 2px rgba(88,166,255,.25); }

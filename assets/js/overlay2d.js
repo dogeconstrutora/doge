@@ -289,9 +289,6 @@ function buildFloorsFromApartamentos(){
 
 
 
-
-
-
 /**
  * Mapa de lookup para a FVS ativa.
  * CHAVE: usa local_origem (antes: apartamento)
@@ -439,8 +436,6 @@ export function recolorCards2D(){
     }
   });
 }
-
-
 
 
 
@@ -743,8 +738,6 @@ if (_pendingScrollRestore){
   // opcional: se você quiser começar sempre na página 1 ao entrar no 2D:
   // host.scrollLeft = 0;
 }
-
-
 
 
 // === Efeito "esfumaçado" no 3D quando o 2D estiver ativo ===
