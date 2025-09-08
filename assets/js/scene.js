@@ -50,6 +50,21 @@ const Home = {
   phi: 0
 };
 
+
+// --- Two-finger gesture guard: bloqueia recentralizações durante gesto de 2 dedos
+let __touchIds = new Set();
+function _onPtrDown(e){ if (e.pointerType === 'touch') __touchIds.add(e.pointerId); }
+function _onPtrUp(e){ if (e.pointerType === 'touch') __touchIds.delete(e.pointerId); }
+function isTwoFingerActive(){ return __touchIds.size >= 2; }
+function installTwoFingerGuard(){
+  window.addEventListener('pointerdown', _onPtrDown, { passive:true });
+  window.addEventListener('pointerup', _onPtrUp, { passive:true });
+  window.addEventListener('pointercancel', _onPtrUp, { passive:true });
+  window.addEventListener('lostpointercapture', _onPtrUp, { passive:true });
+}
+
+
+
 function saveHomeFromState() {
   Home.has = true;
   Home.target.copy(State.orbitTarget);
@@ -108,6 +123,8 @@ export function initScene() {
   if (!Number.isFinite(State.radius)) State.radius = 28;
 
   getAppEl().prepend(cvs);
+  installTwoFingerGuard(); // impede recenter/fit/reset durante gesto com 2 dedos
+
 
   window.addEventListener('resize', onResize, { passive: true });
   onResize();
@@ -192,6 +209,7 @@ function fitDistanceToBBox(bb, { vfovRad, aspect, margin = 1.6, verticalOffsetRa
 
 // ------------- Camera recentre (fit) -------------
 export function recenterCamera(a = undefined, b = undefined, c = undefined) {
+  if (isTwoFingerActive()) return; // ⛔ durante gesto mobile
   let options = {};
   if (a && typeof a === 'object' && !('x' in a)) {
     options = a;
@@ -328,6 +346,7 @@ export function refreshModelPivotAndFit({ animate = false } = {}) {
 
 // Compat: centraliza e (opcional) salva como Home
 export function syncOrbitTargetToModel({ root = null, animate = false, saveAsHome = false } = {}) {
+  if (isTwoFingerActive()) return; // ⛔ durante gesto mobile
   const bb = computeCurrentBBox(root);
   if (!bb) return;
 
@@ -343,6 +362,7 @@ export function syncOrbitTargetToModel({ root = null, animate = false, saveAsHom
 
 // ------------- Reset (volta ao Home “em pé”) -------------
 export function resetRotation() {
+  if (isTwoFingerActive()) return; // ⛔ durante gesto mobile
   if (Home.has) {
     State.orbitTarget.copy(Home.target);
     State.radius = Home.radius;
