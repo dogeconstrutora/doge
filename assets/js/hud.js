@@ -308,6 +308,39 @@ export function initHUD(){
   // Listeners padrão (NC, FVS, sliders etc)
   wireEvents(fvsIndex);
 
+  // ===============================
+  // <<< ADD: Listener do long-press vindo do viewer
+  // ===============================
+  (window.DOGE ||= {}).__isoFloor ??= null; // guarda nível isolado atual (toggle)
+
+  window.addEventListener('doge:isolate-floor', (ev)=>{
+    const d = ev?.detail || {};
+    let lv = Number(d.levelIdx);
+    if (!Number.isFinite(lv)) return;
+
+    const max = Number(getMaxLevel?.() ?? 0) || 0;
+
+    // Toggle: se já está isolado nesse mesmo nível → desfaz (mostrar todos)
+    if (window.DOGE.__isoFloor === lv){
+      window.DOGE.__isoFloor = null;
+      // “Todos os pavimentos”
+      if (typeof applyFloorLimit === 'function') applyFloorLimit(max);
+      if (typeof showAllFloors   === 'function') showAllFloors();
+      if (floorLimitRange) floorLimitRange.value = String(max);
+      if (floorLimitValue) floorLimitValue.textContent = '—all—';
+      render();
+      return;
+    }
+
+    // Isolar novo nível
+    window.DOGE.__isoFloor = lv;
+    if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
+    if (floorLimitRange) floorLimitRange.value = String(lv);
+    if (floorLimitValue) floorLimitValue.textContent = `${lv}`;
+    render();
+  }, { passive:true });
+  // ===============================
+
   // Observer para mudanças no HUD (recalcula cards 2D)
   setupHudResizeObserver();
 
@@ -534,7 +567,7 @@ async function openSettingsModal(){
   btn2D?.addEventListener('click', ()=> setTimeout(sync2DUI, 0), { passive:true });
   btn2D?.addEventListener('keydown', (e)=>{
     if (e.key==='Enter' || e.key===' '){ setTimeout(sync2DUI, 0); }
-  }, { passive:true });
+  }, { passive:false });
 }
 
 // ============================
