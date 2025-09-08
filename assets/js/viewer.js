@@ -86,9 +86,9 @@ function installBackdropObserver() {
     loading?.classList.remove('hidden');
 
     await loadAllData();
-
-    window.DOGE ||= {};
+window.DOGE ||= {};
 window.DOGE.USE_VIEWER_POINTERS = true;
+window.DOGE.__userInteracted = false; // <<< ADD: flag global
 
     initScene();
     installDebugSpies(); // <<< ADICIONE ESTA LINHA
@@ -148,62 +148,61 @@ function installDebugSpies() {
     render();
 
     // Fit inicial "guardado" (mesma Home do Reset), evitando corte/drift
-    (function fitInitialView(){
-      requestAnimationFrame(()=>{
-        // garante aspect correto após CSS/layout
-        window.dispatchEvent(new Event('resize'));
+(function fitInitialView(){
+  requestAnimationFrame(()=>{
+    // garante aspect correto após CSS/layout
+    window.dispatchEvent(new Event('resize'));
 
-        requestAnimationFrame(()=>{
-          // Faz UM único fit e salva como Home
-          syncOrbitTargetToModel({ saveAsHome: true, animate: false });
-          resetRotation(); // deixa "em pé"
+    requestAnimationFrame(()=>{
+      // Faz UM único fit e salva como Home
+      syncOrbitTargetToModel({ saveAsHome: true, animate: false });
+      resetRotation();
+      render();
+
+      // --- Watchdog 1.2s: somente para evitar corte de topo,
+      //     e DESLIGA ao primeiro input do usuário
+      const T_GUARD = 1200;
+      const t0 = performance.now();
+
+      function worldTopToScreen() {
+        const torre = getTorre?.();
+        const root = torre || scene;
+        if (!root) return null;
+        const bb = new THREE.Box3().setFromObject(root);
+        if (!bb) return null;
+        const topCenter = new THREE.Vector3(
+          (bb.min.x + bb.max.x) * 0.5,
+          bb.max.y,
+          (bb.min.z + bb.max.z) * 0.5
+        );
+        const v = topCenter.clone().project(camera);
+        const size = renderer.getSize(new THREE.Vector2());
+        return { x: (v.x*0.5+0.5)*size.x, y: (-v.y*0.5+0.5)*size.y };
+      }
+
+      function guardTick(){
+        const dt = performance.now() - t0;
+
+        // se o usuário já interagiu, encerra o guard
+        if (window.DOGE?.__userInteracted) return;
+
+        // apenas protege contra "corte de topo" na janela inicial
+        const scr = worldTopToScreen();
+        const cutTop = scr && scr.y < 0;
+        if (cutTop) {
+          syncOrbitTargetToModel({ saveAsHome: false, animate: false });
+          resetRotation();
           render();
+        }
 
-          // --- Watchdog 1.2s: se cortar topo ou o alvo/raio mudar, refaz fit ---
-          const T_GUARD = 1200;
-          const t0 = performance.now();
-          const target0 = State.orbitTarget.clone();
-          const radius0 = State.radius;
+        if (dt < T_GUARD) requestAnimationFrame(guardTick);
+      }
 
-          function worldTopToScreen() {
-            const torre = getTorre?.();
-            const root = torre || scene;
-            if (!root) return null;
-            const bb = new THREE.Box3().setFromObject(root);
-            if (!bb) return null;
-            const topCenter = new THREE.Vector3(
-              (bb.min.x + bb.max.x) * 0.5,
-              bb.max.y,
-              (bb.min.z + bb.max.z) * 0.5
-            );
-            const v = topCenter.clone().project(camera);
-            const size = renderer.getSize(new THREE.Vector2());
-            return { x: (v.x*0.5+0.5)*size.x, y: (-v.y*0.5+0.5)*size.y };
-          }
+      requestAnimationFrame(guardTick);
+    });
+  });
+})();
 
-          function guardTick(){
-            const dt = performance.now() - t0;
-            const scr = worldTopToScreen();
-            const cutTop = scr && scr.y < 0;
-            const driftTarget =
-              Math.abs(State.orbitTarget.x - target0.x) > 1e-3 ||
-              Math.abs(State.orbitTarget.y - target0.y) > 1e-3 ||
-              Math.abs(State.orbitTarget.z - target0.z) > 1e-3 ||
-              Math.abs(State.radius - radius0) > 1e-3;
-
-            if (cutTop || driftTarget) {
-              // reaplica o mesmo fit “Home” para estabilizar
-              syncOrbitTargetToModel({ saveAsHome: false, animate: false });
-              resetRotation();
-              render();
-            }
-
-            if (dt < T_GUARD) requestAnimationFrame(guardTick);
-          }
-          requestAnimationFrame(guardTick);
-        });
-      });
-    })();
 
     initHUD();
     applyFVSAndRefresh();
@@ -303,6 +302,9 @@ function wireUnifiedInput(){
   const cvs = getCanvas();
   if (!cvs) return;
 
+  // flag para "desarmar" o watchdog do fit inicial assim que o usuário interagir
+  const markInteracted = () => { (window.DOGE ||= {}).__userInteracted = true; };
+
   // Só focar no ponteiro se o zoom realmente mudar o radius
   function willZoomApply(scale){
     const r = Number(State.radius) || 20;
@@ -342,6 +344,7 @@ function wireUnifiedInput(){
   let _gPrevRotationDeg = 0;
 
   cvs.addEventListener('gesturestart',  (e) => {
+    markInteracted();                      // <<< ADD
     if (inputLocked()) return;
     _gPrevScale = (typeof e.scale === 'number' && e.scale > 0) ? e.scale : 1;
     _gPrevRotationDeg = (typeof e.rotation === 'number') ? e.rotation : 0;
@@ -387,6 +390,7 @@ function wireUnifiedInput(){
   const PAN_LATCH_MS = 650;
 
   cvs.addEventListener('dblclick', (e) => {
+    markInteracted();                      // <<< ADD
     if (inputLocked()) return;
     panLatchUntil = performance.now() + PAN_LATCH_MS;
     e.preventDefault();
@@ -397,6 +401,7 @@ function wireUnifiedInput(){
   const DOUBLE_TAP_MAX_D = 22;
 
   cvs.addEventListener('touchstart', (e) => {
+    markInteracted();                      // <<< ADD
     if (inputLocked()) return;
     if (e.touches.length !== 1) return;
     const t = performance.now();
@@ -455,6 +460,8 @@ function wireUnifiedInput(){
   };
 
   cvs.addEventListener('pointerdown', (e)=>{
+    markInteracted();                      // <<< ADD
+
     // failsafe: se o modal fechou mas ficou lock, solta
     if (!isModalOpen() && window.DOGE && window.DOGE.inputLocked) {
       window.DOGE.inputLocked = false;
@@ -524,9 +531,10 @@ function wireUnifiedInput(){
       pinchPrevDist = dist;
 
       // === PAN do centro (suave) ===
-      if (pinchPrevMid && mid){
-        const mdx = mid.x - pinchPrevMid.x;
-        const mdy = mid.y - pinchPrevMid.y;
+      const midPrev = pinchPrevMid;
+      if (midPrev && mid){
+        const mdx = mid.x - midPrev.x;
+        const mdy = mid.y - midPrev.y;
         if (mdx || mdy) panDelta(mdx, mdy);
       }
       pinchPrevMid  = mid;
@@ -565,6 +573,7 @@ function wireUnifiedInput(){
   // 5) Wheel (mouse/trackpad) = zoom com foco no ponteiro (mantido)
   // ───────────────────────────────────────────────────────────────
   cvs.addEventListener('wheel', (e) => {
+    markInteracted();                      // <<< ADD
     if (inputLocked()) return;
 
     e.preventDefault();
@@ -590,5 +599,6 @@ function wireUnifiedInput(){
   // Necessário para twist com right-drag
   cvs.addEventListener('contextmenu', e => e.preventDefault(), { passive:false });
 }
+
 
 
