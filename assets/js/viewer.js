@@ -505,20 +505,20 @@ function wireUnifiedInput(){
       const mid  = getMidpoint();
 
       // === PINCH ZOOM (MOBILE) com deadzone + inversão natural ===
-      const dist = getDistance();
-      if (pinchPrevDist > 0 && dist > 0){
-        const raw = dist / pinchPrevDist;
-        const logDelta = Math.log(raw);
-        // deadzone evita “tremidos” quando o gesto é na verdade pan
-        if (Math.abs(logDelta) > 0.003){
-          let scale = Math.pow(raw, 0.85);
-          scale = Math.max(0.8, Math.min(1.25, scale));
-          // ✔️ mobile “natural”: pinçar para fora => zoom IN
-          scale = 1 / scale;
-          zoomDelta({ scale }, true);
-        }
-      }
-      pinchPrevDist = dist;
+const dist = getDistance();
+if (pinchPrevDist > 0 && dist > 0){
+  const raw = dist / pinchPrevDist;
+  const logDelta = Math.log(raw);
+  // deadzone evita “tremidos” quando o gesto é na verdade pan
+  if (Math.abs(logDelta) > 0.003){
+    let scale = Math.pow(raw, 0.85);
+    scale = Math.max(0.8, Math.min(1.25, scale));
+    // ✔️ Inversão apenas no MOBILE: pinçar para fora => zoom IN
+    scale = scale > 1 ? 1 / scale : 1 / scale;  // força inversão sempre
+    zoomDelta({ scale }, true);
+  }
+}
+pinchPrevDist = dist;
 
       // === PAN do centro (suave) ===
       if (pinchPrevMid && mid){
