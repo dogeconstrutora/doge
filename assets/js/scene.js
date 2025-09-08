@@ -525,23 +525,41 @@ export function panDelta(dx, dy) {
 
 function animatePan() {
   if (!_pendingPan) return;
+
   let { dx, dy } = _pendingPan;
+
+  // suavização da fila acumulada
   const applyDx = dx * PAN_SMOOTH;
   const applyDy = dy * PAN_SMOOTH;
   _pendingPan.dx -= applyDx;
   _pendingPan.dy -= applyDy;
 
+  // escala do pan em função do raio atual (mesma de antes)
   const base = (State.radius || 20) * (0.0035 * PAN_FACTOR);
 
-  const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+  // eixos de tela (direita / cima da tela no espaço da câmera)
+  const right    = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
   const upScreen = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize();
 
-  State.orbitTarget.addScaledVector(right, -applyDx * base);
-  State.orbitTarget.addScaledVector(upScreen, applyDy * base);
+  // === VETOR DE PAN EM ESPAÇO DE MUNDO (usaremos tanto no target quanto no alvo do zoom)
+  const panWorld = new THREE.Vector3()
+    .addScaledVector(right,   -applyDx * base)
+    .addScaledVector(upScreen,  applyDy * base);
+
+  // aplica no alvo atual
+  State.orbitTarget.add(panWorld);
+
+  // 🔧 CORREÇÃO DO “ELÁSTICO”:
+  // se existe um destino acumulado de zoom, ele precisa acompanhar o mesmo deslocamento,
+  // senão o loop de easing do zoom “puxa” o alvo de volta para onde ele estava.
+  if (_zoomTargetOrbit && _zoomTargetOrbit.isVector3) {
+    _zoomTargetOrbit.add(panWorld);
+  }
 
   applyOrbitToCamera();
   render();
 
+  // continua animando até esgotar a fila suavizada
   if (Math.abs(_pendingPan.dx) > 0.2 || Math.abs(_pendingPan.dy) > 0.2) {
     _panAnim = requestAnimationFrame(animatePan);
   } else {
