@@ -680,8 +680,11 @@ export function wireUnifiedInput(){
   const cvs = renderer?.domElement;
   if (!cvs) return;
 
-  // marca “houve interação” (para qualquer watchdog externo que o viewer use)
+  // marca “houve interação”
   const markInteracted = () => { (window.DOGE ||= {}).__userInteracted = true; };
+
+  // ⤵️ Foco do zoom (NDC) mais recente — usado no pinch (pointer) e como fallback no Safari (gesture)
+  let lastFocusNDC = null;
 
   // 1) Bloqueio do page-zoom apenas sobre o canvas
   (function installGlobalPinchBlock(el){
@@ -721,7 +724,11 @@ export function wireUnifiedInput(){
       let factor = e.scale / (_gPrevScale || 1);
       if (Math.abs(Math.log(factor)) > 0.003){
         factor = Math.max(0.8, Math.min(1.25, Math.pow(factor, 0.85)));
-        zoomDelta({ scale: 1 / factor }, /*isPinch=*/true);
+        // usa o último foco conhecido (de touchmove 2 dedos ou do pointer/pinch)
+        const payload = lastFocusNDC
+          ? { scale: 1 / factor, focusNDC: lastFocusNDC }
+          : { scale: 1 / factor };
+        zoomDelta(payload, /*isPinch=*/true);
       }
       _gPrevScale = e.scale;
     }
@@ -742,6 +749,19 @@ export function wireUnifiedInput(){
     _gPrevRotationDeg = 0;
     e.preventDefault();
   }, { passive:false });
+
+  // 🔎 Fallback para Safari/iOS: rastrear apenas o centro da pinça (sem acionar gestos aqui)
+  cvs.addEventListener('touchmove', (e) => {
+    if (e.touches?.length === 2) {
+      const r = cvs.getBoundingClientRect();
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) * 0.5;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) * 0.5;
+      lastFocusNDC = {
+        x: ((midX - r.left) / r.width)  * 2 - 1,
+        y: -(((midY - r.top)  / r.height) * 2 - 1)
+      };
+    }
+  }, { passive:true });
 
   // 3) Pan latch (duplo clique/toque)
   let panLatchUntil = 0;
@@ -878,7 +898,7 @@ export function wireUnifiedInput(){
       // === sempre calcule 'mid' primeiro ===
       const mid  = getMidpoint();
 
-      // === PINCH ZOOM (MOBILE) com deadzone + inversão natural ===
+      // === PINCH ZOOM (MOBILE) com deadzone + inversão natural + FOCO NA PINÇA ===
       const dist = getDistance();
       if (pinchPrevDist > 0 && dist > 0){
         const raw = dist / pinchPrevDist;
@@ -888,7 +908,20 @@ export function wireUnifiedInput(){
           scale = Math.max(0.8, Math.min(1.25, scale));
           // mobile “natural”: pinçar para fora => zoom IN
           scale = 1 / scale;
-          zoomDelta({ scale }, true);
+
+          // foco no centro da pinça (NDC)
+          let ndc = null;
+          if (mid) {
+            const r = cvs.getBoundingClientRect();
+            ndc = {
+              x: ((mid.x - r.left) / r.width)  * 2 - 1,
+              y: -(((mid.y - r.top)  / r.height) * 2 - 1)
+            };
+            lastFocusNDC = ndc; // mantém atualizado (usado também no Safari gesture)
+          }
+
+          if (ndc) zoomDelta({ scale, focusNDC: ndc }, /*isPinch=*/true);
+          else     zoomDelta({ scale }, /*isPinch=*/true);
         }
       }
       pinchPrevDist = dist;
