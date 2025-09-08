@@ -192,10 +192,6 @@ function fitDistanceToBBox(bb, { vfovRad, aspect, margin = 1.6, verticalOffsetRa
 
 // ------------- Camera recentre (fit) -------------
 export function recenterCamera(a = undefined, b = undefined, c = undefined) {
-  if (window.DOGE?.LOG_ON) {
-  const st = new Error().stack?.split('\n')?.slice(2,6)?.join(' ⟶ ') || '';
-  console.log('[LOG][recenterCamera]', { options: arguments[0] }, st);
-}
   let options = {};
   if (a && typeof a === 'object' && !('x' in a)) {
     options = a;
@@ -332,11 +328,6 @@ export function refreshModelPivotAndFit({ animate = false } = {}) {
 
 // Compat: centraliza e (opcional) salva como Home
 export function syncOrbitTargetToModel({ root = null, animate = false, saveAsHome = false } = {}) {
-  if (window.DOGE?.LOG_ON) {
-  const st = new Error().stack?.split('\n')?.slice(2,6)?.join(' ⟶ ') || '';
-  console.log('[LOG][syncOrbitTargetToModel]', { root: arguments[0]?.root, animate: arguments[0]?.animate, saveAsHome: arguments[0]?.saveAsHome }, st);
-}
-
   const bb = computeCurrentBBox(root);
   if (!bb) return;
 
@@ -352,11 +343,6 @@ export function syncOrbitTargetToModel({ root = null, animate = false, saveAsHom
 
 // ------------- Reset (volta ao Home “em pé”) -------------
 export function resetRotation() {
-  if (window.DOGE?.LOG_ON) {
-  const st = new Error().stack?.split('\n')?.slice(2,6)?.join(' ⟶ ') || '';
-  console.log('[LOG][resetRotation]', st);
-}
-
   if (Home.has) {
     State.orbitTarget.copy(Home.target);
     State.radius = Home.radius;
@@ -508,8 +494,6 @@ export function orbitTwist(deltaAngleRad) {
 
 // ========== PAN SUAVE ==========
 export function panDelta(dx, dy) {
-  if (window.DOGE?.LOG_ON) console.log('[LOG][panDelta]', { dx, dy });
-
   ensureOrbitTargetVec3();
   if (_pendingPan) {
     _pendingPan.dx += dx;
@@ -558,8 +542,6 @@ let _zoomSmoothing = 0.22;          // 0..1 - mais alto = chega mais rápido
 
 // ====== ZOOM SUAVE (acumulativo, com foco opcional no ponteiro) ======
 export function zoomDelta(deltaOrObj = 0, isPinch = false) {
-  if (window.DOGE?.LOG_ON) console.log('[LOG][zoomDelta]', { deltaOrObj, isPinch });
-
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const rNow = clamp(Number(State.radius) || 20, ZOOM_MIN, ZOOM_MAX);
 

@@ -90,10 +90,10 @@ function installBackdropObserver() {
 window.DOGE ||= {};
 window.DOGE.USE_VIEWER_POINTERS = true;
 window.DOGE.__userInteracted = false;   // flag inicial para watchdog
-const qs = new URL(location.href).searchParams;
-window.DOGE.LOG_ON = qs.has('log');            // ativa logs
-window.DOGE.DISABLE_FIT_GUARD = qs.has('noguard'); // desliga guard
 
+// Liga/desliga logs e kill-switch do guard
+window.DOGE.LOG_ON = true;            // <— coloque false pra silenciar
+window.DOGE.DISABLE_FIT_GUARD = false; // <— coloque true para DESLIGAR o guard
 
 // Failsafe: garante que qualquer interação global marque como "já interagiu"
 ["pointerdown","touchstart","wheel","gesturestart"].forEach(ev=>{
@@ -195,74 +195,52 @@ function installDebugSpies() {
     // Fit inicial "guardado" (mesma Home do Reset), evitando corte/drift
 (function fitInitialView(){
   requestAnimationFrame(()=>{
+    // garante aspect correto após CSS/layout
     window.dispatchEvent(new Event('resize'));
 
     requestAnimationFrame(()=>{
-      // Fit único → define Home
+      // Faz UM único fit e salva como Home
       syncOrbitTargetToModel({ saveAsHome: true, animate: false });
-      resetRotation();
+      resetRotation(); // deixa "em pé"
       render();
 
-      // Kill-switch: desliga completamente o guard, pra teste A/B
-      if (window.DOGE?.DISABLE_FIT_GUARD) {
-        console.log('[LOG][guard] DESABILITADO por DISABLE_FIT_GUARD=true');
-        return;
-      }
-
+      // --- Watchdog 1.2s: apenas evita "corte de topo"
+      //     e DESLIGA ao primeiro input do usuário
       const T_GUARD = 1200;
       const t0 = performance.now();
 
-      // snapshot só pra log (não vamos mais usar pra "drift reset")
-      const t0Target = State.orbitTarget.clone();
-      const r0 = State.radius;
-
       function worldTopToScreen() {
-        try{
-          const torre = getTorre?.();
-          const root = torre || scene;
-          if (!root) return null;
-          const bb = new THREE.Box3().setFromObject(root);
-          if (!bb) return null;
-          const topCenter = new THREE.Vector3(
-            (bb.min.x + bb.max.x) * 0.5,
-            bb.max.y,
-            (bb.min.z + bb.max.z) * 0.5
-          );
-          const v = topCenter.clone().project(camera);
-          const size = renderer.getSize(new THREE.Vector2());
-          return { x: (v.x*0.5+0.5)*size.x, y: (-v.y*0.5+0.5)*size.y };
-        } catch { return null; }
+        const torre = getTorre?.();
+        const root = torre || scene;
+        if (!root) return null;
+        const bb = new THREE.Box3().setFromObject(root);
+        if (!bb) return null;
+        const topCenter = new THREE.Vector3(
+          (bb.min.x + bb.max.x) * 0.5,
+          bb.max.y,
+          (bb.min.z + bb.max.z) * 0.5
+        );
+        const v = topCenter.clone().project(camera);
+        const size = renderer.getSize(new THREE.Vector2());
+        return { x: (v.x*0.5+0.5)*size.x, y: (-v.y*0.5+0.5)*size.y };
       }
 
       function guardTick(){
         const dt = performance.now() - t0;
 
-        if (window.DOGE?.__userInteracted) {
-          if (window.DOGE?.LOG_ON) console.log('[LOG][guard] abortado: usuário interagiu');
-          return;
-        }
+        // se já houve QUALQUER interação do usuário, encerra o guard
+        if (window.DOGE?.__userInteracted) return;
 
+        // só corrige se o topo cortar (nada de "drift" de alvo/raio)
         const scr = worldTopToScreen();
         const cutTop = scr && scr.y < 0;
-
-        // Apenas corrige corte de topo; NÃO usa “drift” pra resetar
         if (cutTop) {
-          if (window.DOGE?.LOG_ON) {
-            const drift = {
-              dx: State.orbitTarget.x - t0Target.x,
-              dy: State.orbitTarget.y - t0Target.y,
-              dz: State.orbitTarget.z - t0Target.z,
-              dr: State.radius - r0
-            };
-            console.log('[LOG][guard] cutTop=true → reaplica fit (sem drift reset)', { scr, drift });
-          }
           syncOrbitTargetToModel({ saveAsHome: false, animate: false });
           resetRotation();
           render();
         }
 
         if (dt < T_GUARD) requestAnimationFrame(guardTick);
-        else if (window.DOGE?.LOG_ON) console.log('[LOG][guard] encerrou pelo tempo (ok)');
       }
 
       requestAnimationFrame(guardTick);
