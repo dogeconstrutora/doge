@@ -90,11 +90,50 @@ function installBackdropObserver() {
 window.DOGE ||= {};
 window.DOGE.USE_VIEWER_POINTERS = true;
 window.DOGE.__userInteracted = false;   // flag inicial para watchdog
+const qs = new URL(location.href).searchParams;
+window.DOGE.LOG_ON = qs.has('log');            // ativa logs
+window.DOGE.DISABLE_FIT_GUARD = qs.has('noguard'); // desliga guard
+
 
 // Failsafe: garante que qualquer interação global marque como "já interagiu"
 ["pointerdown","touchstart","wheel","gesturestart"].forEach(ev=>{
   window.addEventListener(ev, ()=>{ window.DOGE.__userInteracted = true; }, { passive:true });
 });
+
+// === SPY de alterações em radius e orbitTarget.set =================
+(function installDebugSpies() {
+  if (!window.DOGE.LOG_ON) return;
+  try {
+    if (!Object.getOwnPropertyDescriptor(State, '__radiusSpy')) {
+      let __r = Number(State.radius) || 0;
+      Object.defineProperty(State, 'radius', {
+        configurable: true, enumerable: true,
+        get(){ return __r; },
+        set(v){
+          const prev = __r;
+          __r = v;
+          const st = new Error().stack?.split('\n')?.slice(2,6)?.join(' ⟶ ') || '';
+          console.log('[LOG][radius:set]', { prev, next: v, stack: st });
+        }
+      });
+      Object.defineProperty(State, '__radiusSpy', { value:true });
+    }
+  } catch(e){ console.warn('[LOG] radius spy falhou:', e); }
+
+  try {
+    if (State.orbitTarget && typeof State.orbitTarget.set === 'function' && !State.orbitTarget.__dogeSetPatched) {
+      const origSet = State.orbitTarget.set.bind(State.orbitTarget);
+      State.orbitTarget.set = function(x,y,z){
+        const before = { x:this.x, y:this.y, z:this.z };
+        const after  = { x, y, z };
+        const st = new Error().stack?.split('\n')?.slice(2,6)?.join(' ⟶ ') || '';
+        console.log('[LOG][target.set]', { before, after, stack: st });
+        return origSet(x,y,z);
+      };
+      State.orbitTarget.__dogeSetPatched = true;
+    }
+  } catch(e){ console.warn('[LOG] target.set spy falhou:', e); }
+})();
 
 initScene();
     installDebugSpies(); // <<< ADICIONE ESTA LINHA
@@ -156,52 +195,74 @@ function installDebugSpies() {
     // Fit inicial "guardado" (mesma Home do Reset), evitando corte/drift
 (function fitInitialView(){
   requestAnimationFrame(()=>{
-    // garante aspect correto após CSS/layout
     window.dispatchEvent(new Event('resize'));
 
     requestAnimationFrame(()=>{
-      // Faz UM único fit e salva como Home
+      // Fit único → define Home
       syncOrbitTargetToModel({ saveAsHome: true, animate: false });
-      resetRotation(); // deixa "em pé"
+      resetRotation();
       render();
 
-      // --- Watchdog 1.2s: apenas evita "corte de topo"
-      //     e DESLIGA ao primeiro input do usuário
+      // Kill-switch: desliga completamente o guard, pra teste A/B
+      if (window.DOGE?.DISABLE_FIT_GUARD) {
+        console.log('[LOG][guard] DESABILITADO por DISABLE_FIT_GUARD=true');
+        return;
+      }
+
       const T_GUARD = 1200;
       const t0 = performance.now();
 
+      // snapshot só pra log (não vamos mais usar pra "drift reset")
+      const t0Target = State.orbitTarget.clone();
+      const r0 = State.radius;
+
       function worldTopToScreen() {
-        const torre = getTorre?.();
-        const root = torre || scene;
-        if (!root) return null;
-        const bb = new THREE.Box3().setFromObject(root);
-        if (!bb) return null;
-        const topCenter = new THREE.Vector3(
-          (bb.min.x + bb.max.x) * 0.5,
-          bb.max.y,
-          (bb.min.z + bb.max.z) * 0.5
-        );
-        const v = topCenter.clone().project(camera);
-        const size = renderer.getSize(new THREE.Vector2());
-        return { x: (v.x*0.5+0.5)*size.x, y: (-v.y*0.5+0.5)*size.y };
+        try{
+          const torre = getTorre?.();
+          const root = torre || scene;
+          if (!root) return null;
+          const bb = new THREE.Box3().setFromObject(root);
+          if (!bb) return null;
+          const topCenter = new THREE.Vector3(
+            (bb.min.x + bb.max.x) * 0.5,
+            bb.max.y,
+            (bb.min.z + bb.max.z) * 0.5
+          );
+          const v = topCenter.clone().project(camera);
+          const size = renderer.getSize(new THREE.Vector2());
+          return { x: (v.x*0.5+0.5)*size.x, y: (-v.y*0.5+0.5)*size.y };
+        } catch { return null; }
       }
 
       function guardTick(){
         const dt = performance.now() - t0;
 
-        // se já houve QUALQUER interação do usuário, encerra o guard
-        if (window.DOGE?.__userInteracted) return;
+        if (window.DOGE?.__userInteracted) {
+          if (window.DOGE?.LOG_ON) console.log('[LOG][guard] abortado: usuário interagiu');
+          return;
+        }
 
-        // só corrige se o topo cortar (nada de "drift" de alvo/raio)
         const scr = worldTopToScreen();
         const cutTop = scr && scr.y < 0;
+
+        // Apenas corrige corte de topo; NÃO usa “drift” pra resetar
         if (cutTop) {
+          if (window.DOGE?.LOG_ON) {
+            const drift = {
+              dx: State.orbitTarget.x - t0Target.x,
+              dy: State.orbitTarget.y - t0Target.y,
+              dz: State.orbitTarget.z - t0Target.z,
+              dr: State.radius - r0
+            };
+            console.log('[LOG][guard] cutTop=true → reaplica fit (sem drift reset)', { scr, drift });
+          }
           syncOrbitTargetToModel({ saveAsHome: false, animate: false });
           resetRotation();
           render();
         }
 
         if (dt < T_GUARD) requestAnimationFrame(guardTick);
+        else if (window.DOGE?.LOG_ON) console.log('[LOG][guard] encerrou pelo tempo (ok)');
       }
 
       requestAnimationFrame(guardTick);
