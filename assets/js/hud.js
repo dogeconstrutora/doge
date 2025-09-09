@@ -649,42 +649,55 @@ function wireEvents(fvsIndex){
     applyExplode();
     render();
   });
+  
+// Reset geral (volta tudo ao padrão)
+btnResetAll?.addEventListener('click', ()=>{
+  // 1) Explode / Opacidade
+  State.explodeXY = 0;
+  State.explodeY  = 0;
+  if (explodeXYRange) explodeXYRange.value = '0';
+  if (explodeYRange)  explodeYRange.value  = '0';
 
-  // Reset geral (volta tudo ao padrão)
-  btnResetAll?.addEventListener('click', ()=>{
-    State.explodeXY = 0;
-    State.explodeY  = 0;
-    if (explodeXYRange) explodeXYRange.value = '0';
-    if (explodeYRange)  explodeYRange.value  = '0';
+  State.faceOpacity = 1;
+  if (opacityRange) opacityRange.value = '100';
+  setFaceOpacity(1, true);
 
-    const maxLvl2 = getMaxLevelIndex();
-    State.floorLimit = maxLvl2;
-    if (floorLimitRange) floorLimitRange.value = String(maxLvl2);
-    if (floorLimitValue) floorLimitValue.textContent = '—all—';
-    applyFloorLimit(maxLvl2);
+  // 2) Pavimentos → TODOS
+  const maxLvl2 = getMaxLevelIndex(); // ou getMaxLevel(), se preferir
+  State.floorLimit = maxLvl2;
 
-    applyExplode();
+  // <<< IMPORTANTE: limpar isolamento global >>>
+  (window.DOGE ||= {}).__isoFloor = null;
 
-    State.flatten2D = 0;
-    btn2D?.setAttribute('aria-pressed','false');
-    btn2D?.classList.remove('active');
-    hide2D();
-    if (btnZoom2D){
-      btnZoom2D.style.display = 'none';
-      btnZoom2D.textContent = '🔍' + getNextGridZoomSymbolFrom(1);
-    }
-    if (rowSliders) rowSliders.style.display = '';
+  // Mostrar todos os pavimentos e sincronizar HUD
+  if (typeof applyFloorLimit === 'function') applyFloorLimit(maxLvl2);
+  if (typeof showAllFloors   === 'function') showAllFloors();
 
-    State.faceOpacity = 1;
-    if (opacityRange) opacityRange.value = '100';
-    setFaceOpacity(1, true);
+  if (floorLimitRange) floorLimitRange.value = String(maxLvl2);
+  if (floorLimitValue) floorLimitValue.textContent = '—all—';
 
-    recenterCamera({ theta: INITIAL_THETA, phi: INITIAL_PHI, animate: false, margin: 1.18 });
+  // 3) 2D desligado
+  State.flatten2D = 0;
+  btn2D?.setAttribute('aria-pressed','false');
+  btn2D?.classList.remove('active');
+  hide2D();
+  if (btnZoom2D){
+    btnZoom2D.style.display = 'none';
+    btnZoom2D.textContent = '🔍' + getNextGridZoomSymbolFrom(1);
+  }
+  if (rowSliders) rowSliders.style.display = '';
 
-    recolorMeshes3D();
-    render2DCards();
-    render();
-  });
+  // 4) Explode novamente (para aplicar zeros)
+  applyExplode();
+
+  // 5) Recentrar (sem animar)
+  recenterCamera({ theta: INITIAL_THETA, phi: INITIAL_PHI, animate: false, margin: 1.18 });
+
+  // 6) Recolorir e redesenhar
+  recolorMeshes3D();
+  render2DCards();
+  render();
+});
 
   // Toggle 2D
   btn2D?.addEventListener('click', ()=>{
@@ -833,3 +846,4 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
+
