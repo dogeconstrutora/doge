@@ -142,7 +142,7 @@ function wireLongPressIsolateFloor(){
   let timer  = null;
   let moved  = false;
 
-  const HOLD_MS = 450;      // tempo do toque-e-segure
+  const HOLD_MS = 800;      // tempo do toque-e-segure
   const CANCEL_DIST = 12;   // px: se mover mais que isso, cancela
 
   const clear = () => { if (timer){ clearTimeout(timer); } timer=null; downId=null; moved=false; };
