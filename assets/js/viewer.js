@@ -142,31 +142,50 @@ function wireLongPressIsolateFloor(){
   let timer  = null;
   let moved  = false;
 
-  const HOLD_MS = 800;      // tempo do toque-e-segure
+  // rastreia toques ativos para detectar gesto de 2+ dedos
+  const touchIds = new Set();
+
+  const HOLD_MS = 450;      // tempo do toque-e-segure
   const CANCEL_DIST = 12;   // px: se mover mais que isso, cancela
 
   const clear = () => { if (timer){ clearTimeout(timer); } timer=null; downId=null; moved=false; };
 
+  const cancelIfMultiTouch = () => {
+    if (touchIds.size >= 2) {  // pinch/pan a dois dedos: cancela long-press
+      if (timer){ clearTimeout(timer); timer=null; }
+      downId = null;
+      moved = false;
+    }
+  };
+
   cvs.addEventListener('pointerdown', (e)=>{
     if (inputLocked()) return;
+
     // mouse: só botão esquerdo; touch: ok
     if (e.pointerType === 'mouse' && e.button !== 0) return;
 
+    // registra toques ativos
+    if (e.pointerType === 'touch') {
+      touchIds.add(e.pointerId);
+      // se já tem mais de um toque, NÃO arma long-press
+      if (touchIds.size >= 2) { cancelIfMultiTouch(); return; }
+    }
+
+    // a partir daqui, garantido que é 1 dedo ou mouse
     downId = e.pointerId;
     downXY = { x: e.clientX, y: e.clientY };
     moved  = false;
 
-    // arma o long-press
+    // arma o long-press (apenas 1 dedo/mouse)
     timer = setTimeout(()=>{
-      if (moved) { clear(); return; }
+      // aborta se virou multi-touch durante a espera
+      if (moved || touchIds.size >= 2) { clear(); return; }
 
       const obj = pickObjectAtClientXY(downXY.x, downXY.y);
       const levelIdx = obj != null ? findLevelIndexOn(obj) : null;
 
       if (Number.isFinite(levelIdx)){
         (window.DOGE ||= {}).__userInteracted = true; // mata qualquer guard
-
-        // dispara para o HUD (que faz o toggle isolar/desfazer)
         window.dispatchEvent(new CustomEvent('doge:isolate-floor', {
           detail: { levelIdx, source: 'longpress' }
         }));
@@ -176,16 +195,27 @@ function wireLongPressIsolateFloor(){
   }, { passive:true });
 
   cvs.addEventListener('pointermove', (e)=>{
+    // se virou multi-touch, cancela
+    if (e.pointerType === 'touch' && touchIds.size >= 2) { cancelIfMultiTouch(); return; }
+
     if (downId == null || e.pointerId !== downId) return;
     const dx = (e.clientX ?? 0) - downXY.x;
     const dy = (e.clientY ?? 0) - downXY.y;
     if (Math.hypot(dx, dy) > CANCEL_DIST) moved = true;
   }, { passive:true });
 
+  const endLike = (e)=>{
+    if (e.pointerType === 'touch') touchIds.delete(e.pointerId);
+    if (e.pointerId === downId) clear();
+  };
   ['pointerup','pointercancel','lostpointercapture','pointerout','pointerleave'].forEach(type=>{
-    cvs.addEventListener(type, (e)=>{ if (e.pointerId === downId) clear(); }, { passive:true });
+    cvs.addEventListener(type, endLike, { passive:true });
   });
+
+  // failsafe extra: se por algum motivo um segundo dedo tocar depois (dentro do canvas),
+  // o pointerdown acima já cancela; se tocar fora do canvas, normalmente não chega aqui.
 }
+
 
 // ============================
 // Boot
