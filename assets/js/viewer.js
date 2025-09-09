@@ -88,7 +88,8 @@ function findLevelIndexOn(obj){
   return null;
 }
 
-// Raycast no ponto (clientX,clientY) → mesh atingido (respeita isolamento atual)
+// Raycast no ponto (clientX,clientY) → { object, levelIdx }
+// Escolhe o pavimento pela posição Y do hit (pega o “de baixo”).
 function pickObjectAtClientXY(clientX, clientY){
   const cvs = getCanvas();
   if (!cvs || !camera || !scene) return null;
@@ -100,37 +101,59 @@ function pickObjectAtClientXY(clientX, clientY){
   const ray = new THREE.Raycaster();
   ray.setFromCamera({ x, y }, camera);
 
-  // Limita ao root/torre se existir
   const root = (typeof getTorre === 'function' && getTorre()) || scene;
   const hits = ray.intersectObject(root, true);
   if (!hits || !hits.length) return null;
 
   const iso = (window.DOGE && Number.isFinite(window.DOGE.__isoFloor)) ? window.DOGE.__isoFloor : null;
+  const EPS = 0.01; // folga de 1 cm no eixo Y
 
-  // percorre na ordem (frente → trás) até achar um objeto válido
+  // helper para centerY
+  const centerY = (obj) => {
+    try {
+      const bb = new THREE.Box3().setFromObject(obj);
+      return (bb.min.y + bb.max.y) * 0.5;
+    } catch { return null; }
+  };
+
+  // Constrói candidatos visíveis, com levelIdx e centerY
+  const candidates = [];
   for (const h of hits){
-    const obj = h?.object;
+    const obj = h.object;
     if (!obj) continue;
 
-    // Three.js já ignora pais com visible=false, mas reforçamos:
+    // Ignora invisíveis (reforço)
     let visOK = true, p = obj;
-    while (p && visOK){
-      if (p.visible === false) visOK = false;
-      p = p.parent;
-    }
+    while (p && visOK){ if (p.visible === false) visOK = false; p = p.parent; }
     if (!visOK) continue;
 
-    // Se existe isolamento ativo, só aceita se o levelIndex bater
-    if (iso != null){
-      const li = findLevelIndexOn(obj);
-      if (!Number.isFinite(li) || li !== iso) continue;
-    }
+    const li = findLevelIndexOn(obj);
+    if (!Number.isFinite(li)) continue; // só consideramos quem tem nível definido
 
-    return obj; // primeiro hit válido
+    if (iso != null && li !== iso) continue; // respeita isolamento
+
+    const cy = centerY(obj);
+    if (!Number.isFinite(cy)) continue;
+
+    candidates.push({ obj, li, hitY: h.point?.y ?? cy, cy });
   }
 
-  return null;
+  if (!candidates.length) return null;
+
+  // Preferência: maior centerY que seja <= hitY+EPS (o “piso de baixo”)
+  let best = null, bestBelow = -Infinity, bestAbove = Infinity;
+  for (const c of candidates){
+    if (c.cy <= c.hitY + EPS){
+      if (c.cy > bestBelow){ bestBelow = c.cy; best = c; }
+    } else {
+      // fallback: guarda o mais próximo acima caso não haja “de baixo”
+      if (c.cy < bestAbove){ bestAbove = c.cy; if (!Number.isFinite(bestBelow)) best = c; }
+    }
+  }
+
+  return best ? { object: best.obj, levelIdx: best.li } : null;
 }
+
 
 // Define listeners de long-press no canvas e dispara o evento para o HUD
 function wireLongPressIsolateFloor(){
@@ -178,14 +201,13 @@ function wireLongPressIsolateFloor(){
 
     // arma o long-press (apenas 1 dedo/mouse)
     timer = setTimeout(()=>{
-      // aborta se virou multi-touch durante a espera
-      if (moved || touchIds.size >= 2) { clear(); return; }
+      if (moved || (e && e.pointerType === 'touch' && touchIds?.size >= 2)) { clear(); return; }
 
-      const obj = pickObjectAtClientXY(downXY.x, downXY.y);
-      const levelIdx = obj != null ? findLevelIndexOn(obj) : null;
+      const hit = pickObjectAtClientXY(downXY.x, downXY.y);
+      const levelIdx = hit?.levelIdx;
 
       if (Number.isFinite(levelIdx)){
-        (window.DOGE ||= {}).__userInteracted = true; // mata qualquer guard
+        (window.DOGE ||= {}).__userInteracted = true;
         window.dispatchEvent(new CustomEvent('doge:isolate-floor', {
           detail: { levelIdx, source: 'longpress' }
         }));
