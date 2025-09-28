@@ -24,7 +24,7 @@ import {
 import { initOverlay2D, render2DCards, hide2D, show2D } from './overlay2d.js';
 import { initPicking, selectGroup } from './picking.js';
 import { initModal } from './modal.js';
-import { initHUD, applyFVSAndRefresh, refreshFVSForFloor} from './hud.js';
+import { initHUD, refreshFVSForFloor, applyFVSAndRefresh, showOnlyFloor, showAllFloors } from './hud.js';
 
 // ============================
 // Helpers (canvas / modal)
@@ -156,6 +156,7 @@ function pickObjectAtClientXY(clientX, clientY){
 
 
 // Define listeners de long-press no canvas e dispara o evento para o HUD
+
 function wireLongPressIsolateFloor(){
   const cvs = getCanvas();
   if (!cvs) return;
@@ -208,20 +209,19 @@ function wireLongPressIsolateFloor(){
       const levelIdx = hit?.levelIdx;
 
       if (Number.isFinite(levelIdx)){
+        // marca interação do usuário e dispara evento para quem estiver escutando
         (window.DOGE ||= {}).__userInteracted = true;
-        window.DOGE.__isoFloor = levelIdx;
-
-        // dispara evento para HUD (mantido se já houver listeners)
         window.dispatchEvent(new CustomEvent('doge:isolate-floor', {
           detail: { levelIdx, source: 'longpress' }
         }));
 
-        // 🔹 aplica isolamento e filtra FVS do pavimento
+        // 🔹 Isola pavimento e filtra FVS
+        window.DOGE.__isoFloor = levelIdx;
         showOnlyFloor(levelIdx);
         refreshFVSForFloor(levelIdx);
 
       } else {
-        // 🔹 desfaz isolamento e restaura FVS global
+        // 🔹 Nenhum pavimento → desfaz isolamento
         window.DOGE.__isoFloor = null;
         showAllFloors();
         applyFVSAndRefresh();
@@ -425,6 +425,7 @@ window.addEventListener('keydown', (e)=>{
     render();
   }
 }, { passive:true });
+
 
 
 
