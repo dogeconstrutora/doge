@@ -103,7 +103,7 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = nu
   const prevVal = selectEl.value;
   selectEl.innerHTML = '';
 
-  const keys = (fvsIndex._order && fvsIndex._order.length)
+  const keys = (fvsIndex.__order && fvsIndex.__order.length)
     ? fvsIndex.__order.slice()
     : Array.from(fvsIndex.keys());
 
@@ -123,8 +123,8 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = nu
     const opt = document.createElement('option');
     opt.value = k;
     opt.textContent = showNCOnly
-      ? `${b.label} (NC:${c.withNC||0})`
-      : `${b.label} (${c.total||0})`;
+      ? `${b.label} (NC:${c.withNC || 0})`
+      : `${b.label} (${c.total || 0})`;
     selectEl.appendChild(opt);
     added++;
   }
@@ -137,7 +137,7 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = nu
       const c = b.counts || { total: (b.rows?.length || 0), withNC: 0 };
       const opt = document.createElement('option');
       opt.value = k;
-      opt.textContent = ${b.label} (${c.total||0});
+      opt.textContent = `${b.label} (${c.total || 0})`;
       selectEl.appendChild(opt);
     }
   }
@@ -149,7 +149,6 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = nu
     selectEl.value = selectEl.options[0].value;
   }
 }
-
 // === Helpers de Hierarquia (match do mais específico para o mais genérico) ===
 // (bestRowForName já importado de utils.js)
 
@@ -852,4 +851,5 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
+
 
