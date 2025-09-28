@@ -6,7 +6,7 @@ import { State, savePrefs, loadPrefs, getQS, setQS } from './state.js';
 import { applyModalTint } from './modal.js'; // garanta esse import no topo
 import {
   setFaceOpacity, applyExplode, recolorMeshes3D, apply2DVisual,
-  getMaxLevelIndex, showOnlyFloor, showAllFloors, applyFloorLimit, getMaxLevel
+  getMaxLevelIndex, getLevelIndexForName, showOnlyFloor, showAllFloors, applyFloorLimit, getMaxLevel
 } from './geometry.js';
 import {
   render2DCards, recolorCards2D, show2D, hide2D,
@@ -25,12 +25,12 @@ let hudEl, rowSliders, fvsSelect, btnNC, opacityRange, explodeXYRange, explodeYR
 // ============================
 // Índice FVS -> rows / lookup por nome (ORDEM = fvsList)
 // ============================
+
 function buildFVSIndexFromLists(fvsStrings, apts){
-  // Map<FVS_KEY, { label, rows, rowsByNameKey(Map<string,row>), counts:{total,withNC} }>
   const buckets = new Map();
   const order = [];
 
-  // 1) cria buckets respeitando a ordem do fvs-list_by_obra.json
+  // 1) Cria buckets respeitando a ordem do fvs-list_by_obra.json
   for (const label of (Array.isArray(fvsStrings) ? fvsStrings : [])){
     const key = normFVSKey(label);
     if (!key) continue;
@@ -39,18 +39,19 @@ function buildFVSIndexFromLists(fvsStrings, apts){
         label: String(label),
         rows: [],
         rowsByNameKey: new Map(),
-        counts: { total: 0, withNC: 0 }
+        counts: { total: 0, withNC: 0 },
+        levels: new Set() // Novo: conjunto de levelIndex associados
       });
       order.push(key);
     }
   }
 
-  // 2) distribui apartamentos em seus respectivos buckets (apenas se a FVS existir na lista oficial)
+  // 2) Distribui apartamentos em seus respectivos buckets
   for (const r of (apts || [])){
     const key = normFVSKey(r.fvs ?? r.FVS ?? '');
     if (!key) continue;
     const b = buckets.get(key);
-    if (!b) continue; // ignora FVS que não está na lista oficial
+    if (!b) continue;
 
     b.rows.push(r);
     b.counts.total++;
@@ -59,62 +60,40 @@ function buildFVSIndexFromLists(fvsStrings, apts){
     if (ncVal > 0) b.counts.withNC++;
 
     const exactKey = String((r.local_origem ?? r.nome ?? '')).trim();
-    if (exactKey && !b.rowsByNameKey.has(exactKey)) {
+    if (exactKey) {
       b.rowsByNameKey.set(exactKey, r);
+      // Novo: associa levelIndex do apartamento (usando getLevelIndexForName)
+      const levelIdx = getLevelIndexForName(exactKey);
+      if (Number.isFinite(levelIdx)) {
+        b.levels.add(levelIdx);
+      }
     }
   }
 
-  // anexa ordem estável
   Object.defineProperty(buckets, '__order', { value: order, enumerable: false });
   return buckets;
 }
 
-// === Compat: applyFVSAndRefresh (chamada pelo viewer.js) ===
-export function applyFVSAndRefresh(){
-  const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
-
-  let key = State.CURRENT_FVS_KEY || '';
-  if (!key && State.CURRENT_FVS_LABEL) key = normFVSKey(State.CURRENT_FVS_LABEL);
-
-  // escolhe primeira da ordem oficial se necessário
-  if (!key || !fvsIndex.has(key)){
-    const ord = fvsIndex.__order || Array.from(fvsIndex.keys());
-    key = ord[0] || '';
-  }
-
-  if (fvsSelect) {
-    populateFVSSelect(fvsSelect, fvsIndex, /*showNCOnly=*/!!State.NC_MODE);
-    if (key && fvsIndex.has(key)) fvsSelect.value = key;
-  }
-
-  if (key) applyFVSSelection(key, fvsIndex);
-
-  render2DCards();
-  render();
-}
-
-function populateFVSSelect(selectEl, fvsIndex, showNCOnly=false){
+function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = null) {
   if (!selectEl) return;
 
   const prevVal = selectEl.value;
   selectEl.innerHTML = '';
 
-  // usa ordem do arquivo fvs-list_by_obra.json
   const keys = (fvsIndex.__order && fvsIndex.__order.length)
     ? fvsIndex.__order.slice()
     : Array.from(fvsIndex.keys());
 
   let added = 0;
 
-  for (const k of keys){
+  for (const k of keys) {
     const b = fvsIndex.get(k);
     if (!b) continue;
 
-    // Garante counts mesmo que rows venham vazias
-    const c = b.counts || { total: (b.rows?.length || 0), withNC: (b.rows || []).reduce((acc, r)=>{
-      const ncVal = Number(r.qtd_nao_conformidades_ultima_inspecao ?? r.nao_conformidades ?? 0) || 0;
-      return acc + (ncVal > 0 ? 1 : 0);
-    }, 0) };
+    // Filtra por levelIdx, se especificado
+    if (Number.isFinite(levelIdx) && !b.levels.has(levelIdx)) continue;
+
+    const c = b.counts || { total: (b.rows?.length || 0), withNC: 0 };
 
     if (showNCOnly && (c.withNC || 0) === 0) continue;
 
@@ -127,9 +106,9 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly=false){
     added++;
   }
 
-  // Se o filtro NC zerou a lista por algum motivo, mostra todos
-  if (added === 0){
-    for (const k of keys){
+  // Se o filtro NC ou levelIdx zerou a lista, mostra todos (sem filtro de levelIdx)
+  if (added === 0) {
+    for (const k of keys) {
       const b = fvsIndex.get(k);
       if (!b) continue;
       const c = b.counts || { total: (b.rows?.length || 0), withNC: 0 };
@@ -140,10 +119,10 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly=false){
     }
   }
 
-  // Tenta restaurar a seleção anterior, senão fica no primeiro
-  if (prevVal && [...selectEl.options].some(o => o.value === prevVal)){
+  // Restaura seleção anterior ou escolhe a primeira
+  if (prevVal && [...selectEl.options].some(o => o.value === prevVal)) {
     selectEl.value = prevVal;
-  } else if (selectEl.options.length){
+  } else if (selectEl.options.length) {
     selectEl.value = selectEl.options[0].value;
   }
 }
@@ -312,33 +291,37 @@ export function initHUD(){
   // <<< ADD: Listener do long-press vindo do viewer
   // ===============================
   (window.DOGE ||= {}).__isoFloor ??= null; // guarda nível isolado atual (toggle)
+  window.addEventListener('doge:isolate-floor', (ev) => {
+  const d = ev?.detail || {};
+  let lv = Number(d.levelIdx);
+  if (!Number.isFinite(lv)) return;
 
-  window.addEventListener('doge:isolate-floor', (ev)=>{
-    const d = ev?.detail || {};
-    let lv = Number(d.levelIdx);
-    if (!Number.isFinite(lv)) return;
+  const max = Number(getMaxLevel?.() ?? 0) || 0;
+  const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
 
-    const max = Number(getMaxLevel?.() ?? 0) || 0;
-
-    // Toggle: se já está isolado nesse mesmo nível → desfaz (mostrar todos)
-    if (window.DOGE.__isoFloor === lv){
-      window.DOGE.__isoFloor = null;
-      // “Todos os pavimentos”
-      if (typeof applyFloorLimit === 'function') applyFloorLimit(max);
-      if (typeof showAllFloors   === 'function') showAllFloors();
-      if (floorLimitRange) floorLimitRange.value = String(max);
-      if (floorLimitValue) floorLimitValue.textContent = '—all—';
-      render();
-      return;
-    }
-
-    // Isolar novo nível
-    window.DOGE.__isoFloor = lv;
-    if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
-    if (floorLimitRange) floorLimitRange.value = String(lv);
-    if (floorLimitValue) floorLimitValue.textContent = `${lv}`;
+  // Toggle: se já está isolado nesse mesmo nível → desfaz (mostrar todos)
+  if (window.DOGE.__isoFloor === lv) {
+    window.DOGE.__isoFloor = null;
+    if (typeof applyFloorLimit === 'function') applyFloorLimit(max);
+    if (typeof showAllFloors === 'function') showAllFloors();
+    if (floorLimitRange) floorLimitRange.value = String(max);
+    if (floorLimitValue) floorLimitValue.textContent = '—all—';
+    // Novo: repopular dropdown com todas as FVS
+    populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE);
     render();
-  }, { passive:true });
+    return;
+  }
+
+  // Isolar novo nível
+  window.DOGE.__isoFloor = lv;
+  if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
+  if (floorLimitRange) floorLimitRange.value = String(lv);
+  if (floorLimitValue) floorLimitValue.textContent = `${lv}`;
+  // Novo: filtrar dropdown por levelIdx
+  populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, lv);
+  render();
+}, { passive: true });
+
   // ===============================
 
   // Observer para mudanças no HUD (recalcula cards 2D)
@@ -846,3 +829,4 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
+
