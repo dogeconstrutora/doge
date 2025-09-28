@@ -19,12 +19,12 @@ import {
 import {
   buildFromLayout,
   getTorre,
-  apply2DVisual
+  apply2DVisual, showOnlyFloor, showAllFloors
 } from './geometry.js';
 import { initOverlay2D, render2DCards, hide2D, show2D } from './overlay2d.js';
 import { initPicking, selectGroup } from './picking.js';
 import { initModal } from './modal.js';
-import { initHUD, refreshFVSForFloor, applyFVSAndRefresh, showOnlyFloor, showAllFloors } from './hud.js';
+import { initHUD, refreshFVSForFloor, applyFVSAndRefresh } from './hud.js';
 
 // ============================
 // Helpers (canvas / modal)
@@ -425,6 +425,7 @@ window.addEventListener('keydown', (e)=>{
     render();
   }
 }, { passive:true });
+
 
 
 
