@@ -123,8 +123,8 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = nu
     const opt = document.createElement('option');
     opt.value = k;
     opt.textContent = showNCOnly
-      ? ${b.label} (NC:${c.withNC||0})
-      : ${b.label} (${c.total||0});
+      ? `${b.label} (NC:${c.withNC||0})`
+      : `${b.label} (${c.total||0})`;
     selectEl.appendChild(opt);
     added++;
   }
@@ -852,3 +852,4 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
+
