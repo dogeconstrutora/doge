@@ -129,26 +129,49 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = nu
     added++;
   }
 
-  // Se o filtro NC ou levelIdx zerou a lista, mostra todos (sem filtro de levelIdx)
-  if (added === 0) {
+  // Novo fallback: se vazio e showNCOnly ativo, adicionar placeholder
+  if (added === 0 && showNCOnly) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'Nenhuma FVS com NC encontrada';
+    opt.disabled = true;
+    opt.selected = true; // Pré-seleciona o placeholder
+    selectEl.appendChild(opt);
+  } else if (added === 0) {
+    // Se vazio sem NC, mostra FVS do pavimento (se levelIdx) ou todas
     for (const k of keys) {
       const b = fvsIndex.get(k);
       if (!b) continue;
+      if (Number.isFinite(levelIdx) && !b.levels.has(levelIdx)) continue; // Respeita levelIdx no fallback sem NC
       const c = b.counts || { total: (b.rows?.length || 0), withNC: 0 };
       const opt = document.createElement('option');
       opt.value = k;
       opt.textContent = `${b.label} (${c.total || 0})`;
       selectEl.appendChild(opt);
+      added++;
+    }
+    if (added === 0) {
+      // Último caso: placeholder geral se ainda vazio
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'Nenhuma FVS encontrada';
+      opt.disabled = true;
+      opt.selected = true;
+      selectEl.appendChild(opt);
     }
   }
 
-  // Restaura seleção anterior ou escolhe a primeira
-  if (prevVal && [...selectEl.options].some(o => o.value === prevVal)) {
+  // Restaura seleção anterior ou escolhe a primeira (ignora placeholder)
+  if (prevVal && [...selectEl.options].some(o => o.value === prevVal && !o.disabled)) {
     selectEl.value = prevVal;
-  } else if (selectEl.options.length) {
-    selectEl.value = selectEl.options[0].value;
+  } else if (selectEl.options.length > 0) {
+    const firstValid = [...selectEl.options].find(o => !o.disabled);
+    if (firstValid) {
+      selectEl.value = firstValid.value;
+    }
   }
 }
+
 // === Helpers de Hierarquia (match do mais específico para o mais genérico) ===
 // (bestRowForName já importado de utils.js)
 
@@ -856,6 +879,7 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
+
 
 
 
