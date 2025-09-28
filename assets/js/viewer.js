@@ -19,12 +19,12 @@ import {
 import {
   buildFromLayout,
   getTorre,
-  apply2DVisual, showOnlyFloor, showAllFloors
+  apply2DVisual
 } from './geometry.js';
 import { initOverlay2D, render2DCards, hide2D, show2D } from './overlay2d.js';
 import { initPicking, selectGroup } from './picking.js';
 import { initModal } from './modal.js';
-import { initHUD, refreshFVSForFloor, applyFVSAndRefresh } from './hud.js';
+import { initHUD, applyFVSAndRefresh } from './hud.js';
 
 // ============================
 // Helpers (canvas / modal)
@@ -156,7 +156,6 @@ function pickObjectAtClientXY(clientX, clientY){
 
 
 // Define listeners de long-press no canvas e dispara o evento para o HUD
-
 function wireLongPressIsolateFloor(){
   const cvs = getCanvas();
   if (!cvs) return;
@@ -172,11 +171,11 @@ function wireLongPressIsolateFloor(){
   const HOLD_MS = 450;      // tempo do toque-e-segure
   const CANCEL_DIST = 12;   // px: se mover mais que isso, cancela
 
-  const clear = () => { if (timer){ clearTimeout(timer); } timer = null; downId = null; moved = false; };
+  const clear = () => { if (timer){ clearTimeout(timer); } timer=null; downId=null; moved=false; };
 
   const cancelIfMultiTouch = () => {
     if (touchIds.size >= 2) {  // pinch/pan a dois dedos: cancela long-press
-      if (timer){ clearTimeout(timer); timer = null; }
+      if (timer){ clearTimeout(timer); timer=null; }
       downId = null;
       moved = false;
     }
@@ -202,31 +201,17 @@ function wireLongPressIsolateFloor(){
 
     // arma o long-press (apenas 1 dedo/mouse)
     timer = setTimeout(()=>{
-      // se mexeu ou virou multi-touch durante o hold -> cancela
-      if (moved || (e && e.pointerType === 'touch' && touchIds.size >= 2)) { clear(); return; }
+      if (moved || (e && e.pointerType === 'touch' && touchIds?.size >= 2)) { clear(); return; }
 
       const hit = pickObjectAtClientXY(downXY.x, downXY.y);
       const levelIdx = hit?.levelIdx;
 
       if (Number.isFinite(levelIdx)){
-        // marca interação do usuário e dispara evento para quem estiver escutando
         (window.DOGE ||= {}).__userInteracted = true;
         window.dispatchEvent(new CustomEvent('doge:isolate-floor', {
           detail: { levelIdx, source: 'longpress' }
         }));
-
-        // 🔹 Isola pavimento e filtra FVS
-        window.DOGE.__isoFloor = levelIdx;
-        showOnlyFloor(levelIdx);
-        refreshFVSForFloor(levelIdx);
-
-      } else {
-        // 🔹 Nenhum pavimento → desfaz isolamento
-        window.DOGE.__isoFloor = null;
-        showAllFloors();
-        applyFVSAndRefresh();
       }
-
       clear();
     }, HOLD_MS);
   }, { passive:true });
@@ -252,6 +237,7 @@ function wireLongPressIsolateFloor(){
   // failsafe extra: se por algum motivo um segundo dedo tocar depois (dentro do canvas),
   // o pointerdown acima já cancela; se tocar fora do canvas, normalmente não chega aqui.
 }
+
 
 // ============================
 // Boot
@@ -425,8 +411,3 @@ window.addEventListener('keydown', (e)=>{
     render();
   }
 }, { passive:true });
-
-
-
-
-
