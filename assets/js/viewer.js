@@ -208,11 +208,23 @@ function wireLongPressIsolateFloor(){
       const levelIdx = hit?.levelIdx;
 
       if (Number.isFinite(levelIdx)){
-        // marca interação do usuário e dispara evento para quem estiver escutando
         (window.DOGE ||= {}).__userInteracted = true;
+        window.DOGE.__isoFloor = levelIdx;
+
+        // dispara evento para HUD (mantido se já houver listeners)
         window.dispatchEvent(new CustomEvent('doge:isolate-floor', {
           detail: { levelIdx, source: 'longpress' }
         }));
+
+        // 🔹 aplica isolamento e filtra FVS do pavimento
+        showOnlyFloor(levelIdx);
+        refreshFVSForFloor(levelIdx);
+
+      } else {
+        // 🔹 desfaz isolamento e restaura FVS global
+        window.DOGE.__isoFloor = null;
+        showAllFloors();
+        applyFVSAndRefresh();
       }
 
       clear();
@@ -413,5 +425,6 @@ window.addEventListener('keydown', (e)=>{
     render();
   }
 }, { passive:true });
+
 
 
