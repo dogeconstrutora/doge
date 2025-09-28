@@ -600,38 +600,43 @@ function wireEvents(fvsIndex){
   });
 
   // NC toggle
-  btnNC?.addEventListener('click', ()=>{
-    with2DScrollPreserved(()=>{
-      State.NC_MODE = !State.NC_MODE;
-      const on = !!State.NC_MODE;
-      btnNC.setAttribute('aria-pressed', String(on));
-      btnNC.classList.toggle('active', on);
-      setQS({ nc: on ? '1' : null });
-      const prefs = loadPrefs() || {};
-      prefs.nc = on;
-      savePrefs(prefs);
+btnNC?.addEventListener('click', () => {
+  with2DScrollPreserved(() => {
+    State.NC_MODE = !State.NC_MODE;
+    const on = !!State.NC_MODE;
+    btnNC.setAttribute('aria-pressed', String(on));
+    btnNC.classList.toggle('active', on);
+    setQS({ nc: on ? '1' : null });
+    const prefs = loadPrefs() || {};
+    prefs.nc = on;
+    savePrefs(prefs);
 
-      populateFVSSelect(fvsSelect, fvsIndex, /*showNCOnly=*/on);
+    // Obtém o levelIdx atual, se houver um pavimento isolado
+    const levelIdx = window.DOGE?.__isoFloor ?? null;
 
-      if (State.CURRENT_FVS_KEY && fvsIndex.has(State.CURRENT_FVS_KEY)){
-        if (![...fvsSelect.options].some(o=>o.value===State.CURRENT_FVS_KEY)){
-          const ord = fvsIndex.__order || Array.from(fvsIndex.keys());
-          State.CURRENT_FVS_KEY = ord[0] || '';
-        }
-        if (State.CURRENT_FVS_KEY){
-          fvsSelect.value = State.CURRENT_FVS_KEY;
-          applyFVSSelection(State.CURRENT_FVS_KEY, fvsIndex);
-        }
-      } else if (fvsSelect.options.length){
-        State.CURRENT_FVS_KEY = fvsSelect.options[0].value;
+    // Repopula o dropdown, respeitando o filtro por pavimento (se aplicável) e o modo NC
+    populateFVSSelect(fvsSelect, fvsIndex, on, Number.isFinite(levelIdx) ? levelIdx : null);
+
+    // Atualiza a seleção de FVS, se necessário
+    if (State.CURRENT_FVS_KEY && fvsIndex.has(State.CURRENT_FVS_KEY)) {
+      if (![...fvsSelect.options].some(o => o.value === State.CURRENT_FVS_KEY)) {
+        const ord = fvsIndex.__order || Array.from(fvsIndex.keys());
+        State.CURRENT_FVS_KEY = ord[0] || '';
+      }
+      if (State.CURRENT_FVS_KEY) {
         fvsSelect.value = State.CURRENT_FVS_KEY;
         applyFVSSelection(State.CURRENT_FVS_KEY, fvsIndex);
       }
+    } else if (fvsSelect.options.length) {
+      State.CURRENT_FVS_KEY = fvsSelect.options[0].value;
+      fvsSelect.value = State.CURRENT_FVS_KEY;
+      applyFVSSelection(State.CURRENT_FVS_KEY, fvsIndex);
+    }
 
-      render2DCards();
-      render();
-    });
+    render2DCards();
+    render();
   });
+});
 
   // Opacidade
   opacityRange?.addEventListener('input', ()=>{
@@ -851,6 +856,7 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
+
 
 
 
