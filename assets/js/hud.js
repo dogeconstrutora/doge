@@ -301,7 +301,7 @@ export function initHUD(){
     floorLimitRange.addEventListener('input', ()=>{
       const lv = Number(floorLimitRange.value) || 0;
       showOnlyFloor(lv);
-      if (floorLimitValue) floorLimitValue.textContent = '${lv}';
+      if (floorLimitValue) floorLimitValue.textContent = `${lv}`;
       render();
     });
   }
@@ -339,7 +339,7 @@ window.addEventListener('doge:isolate-floor', (ev) => {
   window.DOGE.__isoFloor = lv;
   if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
   if (floorLimitRange) floorLimitRange.value = String(lv);
-  if (floorLimitValue) floorLimitValue.textContent = '${lv}';
+  if (floorLimitValue) floorLimitValue.textContent = `${lv}`;
   // Novo: filtrar dropdown por levelIdx
   populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, lv);
   render();
@@ -851,6 +851,7 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
+
 
 
 
