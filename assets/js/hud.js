@@ -846,26 +846,3 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
-
-// 🔹 Novo helper: atualiza dropdown FVS só com FVS do pavimento
-export function refreshFVSForFloor(levelIdx){
-  if (!fvsSelect) return;
-
-  // 1. Filtra apartamentos do pavimento
-  const aptosDoPavimento = (apartamentos || []).filter(r => {
-    return Number(r.nivel) === levelIdx;
-  });
-
-  // 2. Cria índice de FVS só com esses apartamentos
-  const fvsIndex = buildFVSIndexFromLists(fvsList || [], aptosDoPavimento);
-
-  // 3. Atualiza dropdown
-  populateFVSSelect(fvsSelect, fvsIndex, /*showNCOnly=*/State.NC_MODE);
-
-  // 4. Seleciona a primeira disponível
-  if (fvsSelect.options.length){
-    const firstKey = fvsSelect.options[0].value;
-    fvsSelect.value = firstKey;
-    applyFVSSelection(firstKey, fvsIndex);
-  }
-}
