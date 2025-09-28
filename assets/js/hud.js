@@ -339,7 +339,7 @@ window.addEventListener('doge:isolate-floor', (ev) => {
   window.DOGE.__isoFloor = lv;
   if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
   if (floorLimitRange) floorLimitRange.value = String(lv);
-  if (floorLimitValue) floorLimitValue.textContent = `${lv}`;
+  if (floorLimitValue) floorLimitValue.textContent = String(lv);
   // Novo: filtrar dropdown por levelIdx
   populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, lv);
   render();
