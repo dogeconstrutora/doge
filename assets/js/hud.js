@@ -301,7 +301,7 @@ export function initHUD(){
     floorLimitRange.addEventListener('input', ()=>{
       const lv = Number(floorLimitRange.value) || 0;
       showOnlyFloor(lv);
-      if (floorLimitValue) floorLimitValue.textContent = `${lv}`;
+      if (floorLimitValue) floorLimitValue.textContent = '${lv}';
       render();
     });
   }
@@ -851,5 +851,6 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
+
 
 
