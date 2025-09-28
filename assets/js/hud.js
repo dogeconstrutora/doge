@@ -25,28 +25,28 @@ let hudEl, rowSliders, fvsSelect, btnNC, opacityRange, explodeXYRange, explodeYR
 // ============================
 // Índice FVS -> rows / lookup por nome (ORDEM = fvsList)
 // ============================
-function buildFVSIndexFromLists(fvsStrings, apts){
+function buildFVSIndexFromLists(fvsStrings, apts) {
   const buckets = new Map();
   const order = [];
 
   // 1) Cria buckets respeitando a ordem do fvs-list_by_obra.json
-  for (const label of (Array.isArray(fvsStrings) ? fvsStrings : [])){
+  for (const label of (Array.isArray(fvsStrings) ? fvsStrings : [])) {
     const key = normFVSKey(label);
     if (!key) continue;
-    if (!buckets.has(key)){
+    if (!buckets.has(key)) {
       buckets.set(key, {
         label: String(label),
         rows: [],
         rowsByNameKey: new Map(),
-        counts: { total: 0, withNC: 0 },
-        levels: new Set() // Novo: conjunto de levelIndex associados
+        counts: { total: 0, withNC: 0 }, // Mantém global para casos sem filtro por pavimento
+        levels: new Set()
       });
       order.push(key);
     }
   }
 
   // 2) Distribui apartamentos em seus respectivos buckets
-  for (const r of (apts || [])){
+  for (const r of (apts || [])) {
     const key = normFVSKey(r.fvs ?? r.FVS ?? '');
     if (!key) continue;
     const b = buckets.get(key);
@@ -61,18 +61,19 @@ function buildFVSIndexFromLists(fvsStrings, apts){
     const exactKey = String((r.local_origem ?? r.nome ?? '')).trim();
     if (exactKey) {
       b.rowsByNameKey.set(exactKey, r);
-      // Novo: associa levelIndex do apartamento (usando getLevelIndexForName)
       const levelIdx = getLevelIndexForName(exactKey);
       if (Number.isFinite(levelIdx)) {
+        r.__levelIdx = levelIdx; // Novo: armazena levelIdx diretamente no row para filtros futuros
         b.levels.add(levelIdx);
       }
+    } else {
+      console.warn(`[hud] Apartamento sem exactKey (nome/local_origem):`, r); // Log para debug de vinculação falha
     }
   }
 
   Object.defineProperty(buckets, '__order', { value: order, enumerable: false });
   return buckets;
 }
-
 // === Compat: applyFVSAndRefresh (chamada pelo viewer.js) ===
 export function applyFVSAndRefresh(){
   const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
@@ -113,45 +114,61 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = nu
     const b = fvsIndex.get(k);
     if (!b) continue;
 
-    // Filtra por levelIdx, se especificado
+    // Filtra por levelIdx, se especificado (usa levels.has para inclusão rápida)
     if (Number.isFinite(levelIdx) && !b.levels.has(levelIdx)) continue;
 
-    const c = b.counts || { total: (b.rows?.length || 0), withNC: 0 };
+    // Novo: calcula counts dinamicamente, restrito ao levelIdx se definido
+    let filteredRows = b.rows;
+    if (Number.isFinite(levelIdx)) {
+      filteredRows = b.rows.filter(r => r.__levelIdx === levelIdx);
+    }
+    const total = filteredRows.length;
+    const withNC = filteredRows.reduce((acc, r) => {
+      const ncVal = Number(r.qtd_nao_conformidades_ultima_inspecao ?? r.nao_conformidades ?? 0) || 0;
+      return acc + (ncVal > 0 ? 1 : 0);
+    }, 0);
 
-    if (showNCOnly && (c.withNC || 0) === 0) continue;
+    const c = { total, withNC };
+
+    // Só inclui se há apartamentos no filtro (total > 0) e passa no filtro NC
+    if (total === 0) continue;
+    if (showNCOnly && withNC === 0) continue;
 
     const opt = document.createElement('option');
     opt.value = k;
     opt.textContent = showNCOnly
-      ? `${b.label} (NC:${c.withNC || 0})`
-      : `${b.label} (${c.total || 0})`;
+      ? `${b.label} (NC:${c.withNC})`
+      : `${b.label} (${c.total})`;
     selectEl.appendChild(opt);
     added++;
   }
 
-  // Novo fallback: se vazio e showNCOnly ativo, adicionar placeholder
+  // Fallback se vazio
   if (added === 0 && showNCOnly) {
     const opt = document.createElement('option');
     opt.value = '';
     opt.textContent = 'Nenhuma FVS com NC encontrada';
     opt.disabled = true;
-    opt.selected = true; // Pré-seleciona o placeholder
+    opt.selected = true;
     selectEl.appendChild(opt);
   } else if (added === 0) {
-    // Se vazio sem NC, mostra FVS do pavimento (se levelIdx) ou todas
+    // Repopula respeitando levelIdx (sem NC)
     for (const k of keys) {
       const b = fvsIndex.get(k);
       if (!b) continue;
-      if (Number.isFinite(levelIdx) && !b.levels.has(levelIdx)) continue; // Respeita levelIdx no fallback sem NC
-      const c = b.counts || { total: (b.rows?.length || 0), withNC: 0 };
+      if (Number.isFinite(levelIdx) && !b.levels.has(levelIdx)) continue;
+
+      const filteredRows = Number.isFinite(levelIdx) ? b.rows.filter(r => r.__levelIdx === levelIdx) : b.rows;
+      const total = filteredRows.length;
+      if (total === 0) continue;
+
       const opt = document.createElement('option');
       opt.value = k;
-      opt.textContent = `${b.label} (${c.total || 0})`;
+      opt.textContent = `${b.label} (${total})`;
       selectEl.appendChild(opt);
       added++;
     }
     if (added === 0) {
-      // Último caso: placeholder geral se ainda vazio
       const opt = document.createElement('option');
       opt.value = '';
       opt.textContent = 'Nenhuma FVS encontrada';
@@ -161,13 +178,16 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = nu
     }
   }
 
-  // Restaura seleção anterior ou escolhe a primeira (ignora placeholder)
+  // Restaura seleção anterior ou escolhe a primeira válida (ignora disabled)
   if (prevVal && [...selectEl.options].some(o => o.value === prevVal && !o.disabled)) {
     selectEl.value = prevVal;
   } else if (selectEl.options.length > 0) {
     const firstValid = [...selectEl.options].find(o => !o.disabled);
     if (firstValid) {
       selectEl.value = firstValid.value;
+    } else {
+      // Se só placeholder, seta vazio
+      State.CURRENT_FVS_KEY = '';
     }
   }
 }
@@ -879,6 +899,7 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
+
 
 
 
