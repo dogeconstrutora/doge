@@ -25,7 +25,6 @@ let hudEl, rowSliders, fvsSelect, btnNC, opacityRange, explodeXYRange, explodeYR
 // ============================
 // Índice FVS -> rows / lookup por nome (ORDEM = fvsList)
 // ============================
-
 function buildFVSIndexFromLists(fvsStrings, apts){
   const buckets = new Map();
   const order = [];
@@ -74,13 +73,37 @@ function buildFVSIndexFromLists(fvsStrings, apts){
   return buckets;
 }
 
+// === Compat: applyFVSAndRefresh (chamada pelo viewer.js) ===
+export function applyFVSAndRefresh(){
+  const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
+
+  let key = State.CURRENT_FVS_KEY || '';
+  if (!key && State.CURRENT_FVS_LABEL) key = normFVSKey(State.CURRENT_FVS_LABEL);
+
+  // escolhe primeira da ordem oficial se necessário
+  if (!key || !fvsIndex.has(key)){
+    const ord = fvsIndex.__order || Array.from(fvsIndex.keys());
+    key = ord[0] || '';
+  }
+
+  if (fvsSelect) {
+    populateFVSSelect(fvsSelect, fvsIndex, /*showNCOnly=*/!!State.NC_MODE);
+    if (key && fvsIndex.has(key)) fvsSelect.value = key;
+  }
+
+  if (key) applyFVSSelection(key, fvsIndex);
+
+  render2DCards();
+  render();
+}
+
 function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = null) {
   if (!selectEl) return;
 
   const prevVal = selectEl.value;
   selectEl.innerHTML = '';
 
-  const keys = (fvsIndex.__order && fvsIndex.__order.length)
+  const keys = (fvsIndex._order && fvsIndex._order.length)
     ? fvsIndex.__order.slice()
     : Array.from(fvsIndex.keys());
 
@@ -100,8 +123,8 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = nu
     const opt = document.createElement('option');
     opt.value = k;
     opt.textContent = showNCOnly
-      ? `${b.label} (NC:${c.withNC||0})`
-      : `${b.label} (${c.total||0})`;
+      ? ${b.label} (NC:${c.withNC||0})
+      : ${b.label} (${c.total||0});
     selectEl.appendChild(opt);
     added++;
   }
@@ -114,7 +137,7 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = nu
       const c = b.counts || { total: (b.rows?.length || 0), withNC: 0 };
       const opt = document.createElement('option');
       opt.value = k;
-      opt.textContent = `${b.label} (${c.total||0})`;
+      opt.textContent = ${b.label} (${c.total||0});
       selectEl.appendChild(opt);
     }
   }
@@ -291,7 +314,8 @@ export function initHUD(){
   // <<< ADD: Listener do long-press vindo do viewer
   // ===============================
   (window.DOGE ||= {}).__isoFloor ??= null; // guarda nível isolado atual (toggle)
-  window.addEventListener('doge:isolate-floor', (ev) => {
+
+window.addEventListener('doge:isolate-floor', (ev) => {
   const d = ev?.detail || {};
   let lv = Number(d.levelIdx);
   if (!Number.isFinite(lv)) return;
@@ -316,12 +340,11 @@ export function initHUD(){
   window.DOGE.__isoFloor = lv;
   if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
   if (floorLimitRange) floorLimitRange.value = String(lv);
-  if (floorLimitValue) floorLimitValue.textContent = `${lv}`;
+  if (floorLimitValue) floorLimitValue.textContent = ${lv};
   // Novo: filtrar dropdown por levelIdx
   populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, lv);
   render();
 }, { passive: true });
-
   // ===============================
 
   // Observer para mudanças no HUD (recalcula cards 2D)
@@ -829,4 +852,3 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
-
