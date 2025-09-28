@@ -847,3 +847,22 @@ function setupHudResizeObserver(){
   }
 }
 
+// 🔹 Novo helper: atualiza dropdown FVS só com FVS do pavimento
+export function refreshFVSForFloor(levelIdx){
+  if (!fvsSelect) return;
+
+  const aptosDoPavimento = (apartamentos || []).filter(r => {
+    return Number(r.levelIndex ?? r.nivel ?? r.pavimento_origem) === levelIdx;
+  });
+
+  const fvsIndex = buildFVSIndexFromLists(fvsList || [], aptosDoPavimento);
+
+  populateFVSSelect(fvsSelect, fvsIndex, /*showNCOnly=*/State.NC_MODE);
+
+  if (fvsSelect.options.length){
+    const firstKey = fvsSelect.options[0].value;
+    fvsSelect.value = firstKey;
+    applyFVSSelection(firstKey, fvsIndex);
+  }
+}
+
