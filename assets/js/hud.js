@@ -352,67 +352,47 @@ export function initHUD(){
 
   (window.DOGE ||= {}).__isoFloor ??= null;
   window.DOGE.__isoPavPrefix ??= null;
-window.addEventListener('doge:isolate-floor', (ev) => {
-  const d = ev?.detail || {};
-  let lv = Number(d.levelIdx);
-  if (!Number.isFinite(lv)) return;
 
-  const max = Number(getMaxLevel?.() ?? 0) || 0;
-  const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
-  const previousFVS = State.CURRENT_FVS_KEY; // Armazena FVS anterior
+  window.addEventListener('doge:isolate-floor', (ev) => {
+    const d = ev?.detail || {};
+    let lv = Number(d.levelIdx);
+    if (!Number.isFinite(lv)) return;
 
-  // Toggle: se já está isolado nesse mesmo nível → desfaz (mostrar todos)
-  if (window.DOGE.__isoFloor === lv) {
-    window.DOGE.__isoFloor = null;
-    if (typeof applyFloorLimit === 'function') applyFloorLimit(max);
-    if (typeof showAllFloors === 'function') showAllFloors();
-    if (floorLimitRange) floorLimitRange.value = String(max);
-    if (floorLimitValue) floorLimitValue.textContent = '—all—';
-    // Repopular dropdown com todas as FVS e restaurar FVS anterior
-    populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE);
-    if (previousFVS && fvsIndex.has(previousFVS)) {
-      fvsSelect.value = previousFVS;
-      State.CURRENT_FVS_KEY = previousFVS;
-      applyFVSSelection(previousFVS, fvsIndex);
-    } else {
-      // Se não houver FVS anterior, selecionar a primeira disponível
-      const ord = fvsIndex.__order || Array.from(fvsIndex.keys());
-      State.CURRENT_FVS_KEY = ord[0] || '';
-      fvsSelect.value = State.CURRENT_FVS_KEY;
-      applyFVSSelection(State.CURRENT_FVS_KEY, fvsIndex);
+    const max = Number(getMaxLevel?.() ?? 0) || 0;
+    const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
+
+    if (window.DOGE.__isoFloor === lv) {
+      window.DOGE.__isoFloor = null;
+      window.DOGE.__isoPavPrefix = null;
+      if (typeof applyFloorLimit === 'function') applyFloorLimit(max);
+      if (typeof showAllFloors === 'function') showAllFloors();
+      if (floorLimitRange) floorLimitRange.value = String(max);
+      if (floorLimitValue) floorLimitValue.textContent = '—all—';
+      populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, null);
+      render();
+      return;
     }
+
+    window.DOGE.__isoFloor = lv;
+    window.DOGE.__isoPavPrefix = getPavimentoPrefixForLevel(lv);
+    if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
+    if (floorLimitRange) floorLimitRange.value = String(lv);
+    if (floorLimitValue) floorLimitValue.textContent = String(lv);
+    populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, window.DOGE.__isoPavPrefix);
+
+    if (fvsSelect.options.length) {
+      let currentKey = State.CURRENT_FVS_KEY || '';
+      if (![...fvsSelect.options].some(o => o.value === currentKey && !o.disabled)) {
+        currentKey = fvsSelect.options[0].value;
+        State.CURRENT_FVS_KEY = currentKey;
+      }
+      fvsSelect.value = currentKey;
+      applyFVSSelection(currentKey, fvsIndex);
+    }
+
     render();
-    return;
-  }
-
-  // Isolar novo nível
-  window.DOGE.__isoFloor = lv;
-  if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
-  if (floorLimitRange) floorLimitRange.value = String(lv);
-  if (floorLimitValue) floorLimitValue.textContent = `${lv}`;
-  // Filtrar dropdown por levelIdx
-  populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, lv);
-
-  // Verificar se há FVS disponíveis no pavimento
-  const availableOptions = [...fvsSelect.options].filter(o => o.value);
-  if (availableOptions.length === 0) {
-    // Se não houver FVS, mostrar placeholder
-    fvsSelect.innerHTML = '<option value="" disabled selected>Nenhuma FVS encontrada</option>';
-    State.CURRENT_FVS_KEY = '';
-  } else if (previousFVS && availableOptions.some(o => o.value === previousFVS)) {
-    // Se a FVS anterior está disponível, mantê-la selecionada
-    fvsSelect.value = previousFVS;
-    State.CURRENT_FVS_KEY = previousFVS;
-    applyFVSSelection(previousFVS, fvsIndex);
-  } else {
-    // Se a FVS anterior não está disponível, não selecionar nada
-    fvsSelect.value = '';
-    State.CURRENT_FVS_KEY = previousFVS || ''; // Mantém FVS anterior para restauração
-  }
-
-  render();
-}, { passive: true });
-
+  }, { passive: true });
+  
   setupHudResizeObserver();
 
   const hudHandle = document.getElementById('hudHandle');
@@ -927,6 +907,4 @@ function setupHudResizeObserver(){
     });
     ro.observe(hudEl);
   }
-
 }
-
