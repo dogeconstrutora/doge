@@ -44,6 +44,36 @@ export function colorFromRowNC(row){
   return (nc > 0) ? PALETTE.red : COLOR_DEFAULT; // sem NC → neutro
 }
 
+// === MODO EM ANDAMENTO ===
+export function colorFromRowInProgress(row) {
+  if (!row) {
+    console.log('[colorFromRowInProgress] Row is null or undefined, returning gray');
+    return PALETTE.gray;
+  }
+
+  const nc = Number(row?.qtd_nao_conformidades_ultima_inspecao ?? 0) || 0;
+  const pend = Number(row?.qtd_pend_ultima_inspecao ?? row?.pendencias ?? 0) || 0;
+  const terminouInicial = !!row?.data_termino_inicial;
+  const key = String(row?.local_origem ?? row?.nome ?? '').trim();
+
+  console.log(`[colorFromRowInProgress] key=${key}, nc=${nc}, pend=${pend}, terminouInicial=${terminouInicial}`);
+
+  if (nc > 0) {
+    console.log(`[colorFromRowInProgress] key=${key}, NC > 0, returning red`);
+    return PALETTE.red; // Vermelho para NC
+  }
+  if (!terminouInicial) {
+    console.log(`[colorFromRowInProgress] key=${key}, not finished, returning blue`);
+    return PALETTE.blue; // Azul para em andamento (mesmo com pendências)
+  }
+  if (pend > 0) {
+    console.log(`[colorFromRowInProgress] key=${key}, pend > 0, returning yellow`);
+    return PALETTE.yellow; // Amarelo para pendências (finalizados)
+  }
+  console.log(`[colorFromRowInProgress] key=${key}, finalized perfectly, returning gray`);
+  return COLOR_DEFAULT; // Cinza para finalizados perfeitos
+}
+
 // ------------------------------------------------------------------
 // Color map por FVS (NORMAL)
 // Agora a chave principal é `local_origem` (quando disponível), com
@@ -61,9 +91,6 @@ export function buildColorMapForFVS(rows){
   return map;
 }
 
-
-
-
 // ------------------------------------------------------------------
 // Color map por FVS (NC)
 // Também prioriza `local_origem` na chave.
@@ -80,9 +107,21 @@ export function buildColorMapForFVS_NC(rows){
   return map;
 }
 
+// ------------------------------------------------------------------
+// Color map por FVS (EM ANDAMENTO)
+// Prioriza `local_origem` na chave.
+// ------------------------------------------------------------------
+export function buildColorMapForFVS_InProgress(rows) {
+  const map = { default: COLOR_DEFAULT, colors: {} };
+  if (!Array.isArray(rows)) return map;
 
-
-
+  for (const r of rows) {
+    const key = String((r?.local_origem ?? r?.nome ?? '')).trim();
+    if (!key) continue;
+    map.colors[key] = colorFromRowInProgress(r);
+  }
+  return map;
+}
 
 // ------------------------------------------------------------------
 // Seleção de cor por Apto/Floor usando COLOR_MAP atual do State
@@ -103,11 +142,6 @@ export function pickFVSColor(aptoName, _floorStr = null, colorMap = State.COLOR_
   }
   return colorMap.default || COLOR_DEFAULT;
 }
-
-
-
-
-
 
 // ------------------------------------------------------------------
 // Utilitários de cor

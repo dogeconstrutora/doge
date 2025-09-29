@@ -1,27 +1,23 @@
-// ============================
-// HUD (controles) — FVS / NC / Opacidade / Explode / 2D / Reset
-// ============================
-
 import { State, savePrefs, loadPrefs, getQS, setQS } from './state.js';
 import { applyModalTint } from './modal.js';
 import {
   setFaceOpacity, applyExplode, recolorMeshes3D, apply2DVisual,
   getMaxLevelIndex, getLevelIndexForName, showOnlyFloor, showAllFloors, applyFloorLimit, getMaxLevel,
-  getPavimentoPrefixForLevel // Novo: importar a função
+  getPavimentoPrefixForLevel
 } from './geometry.js';
 import {
   render2DCards, recolorCards2D, show2D, hide2D,
   setGridZoom, getNextGridZoomSymbol, zoom2DStep, getNextGridZoomSymbolFrom,
   setRowsResolver as setRowsResolver2D
 } from './overlay2d.js';
-import { buildColorMapForFVS, buildColorMapForFVS_NC } from './colors.js';
+import { buildColorMapForFVS, buildColorMapForFVS_NC, buildColorMapForFVS_InProgress } from './colors.js';
 import { syncSelectedColor, setRowResolver as setRowResolver3D, clear3DHighlight } from './picking.js';
 import { recenterCamera, INITIAL_THETA, INITIAL_PHI, render } from './scene.js';
-import { normFVSKey, bestRowForName, isHierarchyMatch } from './utils.js'; // Novo: importar isHierarchyMatch
+import { normFVSKey, bestRowForName, isHierarchyMatch } from './utils.js';
 import { apartamentos, fvsList } from './data.js';
 
 // ---- elementos
-let hudEl, rowSliders, fvsSelect, btnNC, opacityRange, explodeXYRange, explodeYRange, btn2D, btnZoom2D, btnResetAll, floorLimitRange, floorLimitGroup, floorLimitValue;
+let hudEl, rowSliders, fvsSelect, btnNC, btnInProgress, opacityRange, explodeXYRange, explodeYRange, btn2D, btnZoom2D, btnResetAll, floorLimitRange, floorLimitValue, floorLimitGroup;
 
 // ============================
 // Índice FVS -> rows / lookup por nome (ORDEM = fvsList)
@@ -39,8 +35,8 @@ function buildFVSIndexFromLists(fvsStrings, apts) {
         label: String(label),
         rows: [],
         rowsByNameKey: new Map(),
-        counts: { total: 0, withNC: 0 },
-        levels: new Set() // Mantém para compatibilidade, mas não usaremos diretamente
+        counts: { total: 0, withNC: 0, inProgress: 0 },
+        levels: new Set()
       });
       order.push(key);
     }
@@ -58,13 +54,14 @@ function buildFVSIndexFromLists(fvsStrings, apts) {
 
     const ncVal = Number(r.qtd_nao_conformidades_ultima_inspecao ?? r.nao_conformidades ?? 0) || 0;
     if (ncVal > 0) b.counts.withNC++;
+    if (!r.data_termino_inicial || ncVal > 0 || Number(r.qtd_pend_ultima_inspecao ?? r.pendencias ?? 0) > 0) b.counts.inProgress++;
 
     const exactKey = String((r.local_origem ?? r.nome ?? '')).trim();
     if (exactKey) {
       b.rowsByNameKey.set(exactKey, r);
       const levelIdx = getLevelIndexForName(exactKey);
       if (Number.isFinite(levelIdx)) {
-        r.__levelIdx = levelIdx; // Mantém para compatibilidade
+        r.__levelIdx = levelIdx;
         b.levels.add(levelIdx);
       } else {
         console.warn(`[hud] Não foi possível associar levelIdx para row:`, r);
@@ -91,7 +88,7 @@ export function applyFVSAndRefresh(){
   }
 
   if (fvsSelect) {
-    populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, window.DOGE?.__isoPavPrefix ?? null);
+    populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, window.DOGE?.__isoPavPrefix ?? null);
     if (key && fvsIndex.has(key)) fvsSelect.value = key;
   }
 
@@ -101,7 +98,7 @@ export function applyFVSAndRefresh(){
   render();
 }
 
-function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, pavimentoFilter = null) {
+function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, showInProgressOnly = false, pavimentoFilter = null) {
   if (!selectEl) return;
 
   const prevVal = selectEl.value;
@@ -117,7 +114,6 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, pavimentoFilt
     const b = fvsIndex.get(k);
     if (!b) continue;
 
-    // Filtra por pavimentoFilter (prefixo hierárquico)
     let filteredRows = b.rows;
     if (pavimentoFilter) {
       filteredRows = b.rows.filter(r => isHierarchyMatch(r.local_origem ?? r.nome ?? '', pavimentoFilter));
@@ -130,22 +126,37 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, pavimentoFilt
       return acc + (ncVal > 0 ? 1 : 0);
     }, 0);
 
+    const inProgress = filteredRows.reduce((acc, r) => {
+      const ncVal = Number(r.qtd_nao_conformidades_ultima_inspecao ?? r.nao_conformidades ?? 0) || 0;
+      const pendVal = Number(r.qtd_pend_ultima_inspecao ?? r.pendencias ?? 0) || 0;
+      return acc + ((ncVal > 0 || pendVal > 0 || !r.data_termino_inicial) ? 1 : 0);
+    }, 0);
+
     if (showNCOnly && withNC === 0) continue;
+    if (showInProgressOnly && inProgress === 0) continue;
 
     const opt = document.createElement('option');
     opt.value = k;
     opt.textContent = showNCOnly
       ? `${b.label} (NC:${withNC})`
+      : showInProgressOnly
+      ? `${b.label} (Em Andamento:${inProgress})`
       : `${b.label} (${total})`;
     selectEl.appendChild(opt);
     added++;
   }
 
-  // Fallback se vazio
   if (added === 0 && showNCOnly) {
     const opt = document.createElement('option');
     opt.value = '';
     opt.textContent = 'Nenhuma FVS com NC encontrada';
+    opt.disabled = true;
+    opt.selected = true;
+    selectEl.appendChild(opt);
+  } else if (added === 0 && showInProgressOnly) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'Nenhuma FVS em andamento encontrada';
     opt.disabled = true;
     opt.selected = true;
     selectEl.appendChild(opt);
@@ -177,7 +188,6 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, pavimentoFilt
     }
   }
 
-  // Restaura seleção anterior ou escolhe a primeira válida
   if (prevVal && [...selectEl.options].some(o => o.value === prevVal && !o.disabled)) {
     selectEl.value = prevVal;
   } else if (selectEl.options.length > 0) {
@@ -206,7 +216,9 @@ function applyFVSSelection(fvsKey, fvsIndex){
     return bestRowForName(nm, byName);
   });
 
-  State.COLOR_MAP = State.NC_MODE
+  State.COLOR_MAP = State.IN_PROGRESS_MODE
+    ? buildColorMapForFVS_InProgress(rows)
+    : State.NC_MODE
     ? buildColorMapForFVS_NC(rows)
     : buildColorMapForFVS(rows);
 
@@ -223,6 +235,7 @@ export function initHUD(){
   hudEl        = document.getElementById('hud');
   fvsSelect    = document.getElementById('fvsSelect');
   btnNC        = document.getElementById('btnNC');
+  btnInProgress = document.getElementById('btnInProgress');
   btn2D        = document.getElementById('btn2D');
   btnZoom2D    = document.getElementById('btnZoom2D');
   btnResetAll  = document.getElementById('btnResetAll');
@@ -260,10 +273,14 @@ export function initHUD(){
   const prefs = loadPrefs();
   const qsFvs = getQS('fvs');
   const qsNc  = getQS('nc');
+  const qsInProgress = getQS('inProgress');
   State.NC_MODE = (qsNc != null) ? (qsNc === '1' || qsNc === 'true') : !!prefs.nc;
+  State.IN_PROGRESS_MODE = (qsInProgress != null) ? (qsInProgress === '1' || qsInProgress === 'true') : !!prefs.inProgress;
 
   btnNC?.setAttribute('aria-pressed', String(!!State.NC_MODE));
   btnNC?.classList.toggle('active', !!State.NC_MODE);
+  btnInProgress?.setAttribute('aria-pressed', String(!!State.IN_PROGRESS_MODE));
+  btnInProgress?.classList.toggle('active', !!State.IN_PROGRESS_MODE);
 
   [opacityRange, explodeXYRange, explodeYRange].forEach(inp=>{
     if (!inp) return;
@@ -296,7 +313,7 @@ export function initHUD(){
   if (is2D) { show2D(); } else { hide2D(); }
 
   const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
-  populateFVSSelect(fvsSelect, fvsIndex, State.NC_MODE, window.DOGE?.__isoPavPrefix ?? null);
+  populateFVSSelect(fvsSelect, fvsIndex, State.NC_MODE, State.IN_PROGRESS_MODE, window.DOGE?.__isoPavPrefix ?? null);
 
   let initialKey = '';
   const prefKey  = prefs?.fvs ? normFVSKey(prefs.fvs) : '';
@@ -334,48 +351,47 @@ export function initHUD(){
   wireEvents(fvsIndex);
 
   (window.DOGE ||= {}).__isoFloor ??= null;
-  window.DOGE.__isoPavPrefix ??= null; // Novo: armazena prefixo textual do pavimento isolado
+  window.DOGE.__isoPavPrefix ??= null;
 
- window.addEventListener('doge:isolate-floor', (ev) => {
-  const d = ev?.detail || {};
-  let lv = Number(d.levelIdx);
-  if (!Number.isFinite(lv)) return;
+  window.addEventListener('doge:isolate-floor', (ev) => {
+    const d = ev?.detail || {};
+    let lv = Number(d.levelIdx);
+    if (!Number.isFinite(lv)) return;
 
-  const max = Number(getMaxLevel?.() ?? 0) || 0;
-  const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
+    const max = Number(getMaxLevel?.() ?? 0) || 0;
+    const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
 
-  if (window.DOGE.__isoFloor === lv) {
-    window.DOGE.__isoFloor = null;
-    window.DOGE.__isoPavPrefix = null;
-    if (typeof applyFloorLimit === 'function') applyFloorLimit(max);
-    if (typeof showAllFloors === 'function') showAllFloors();
-    if (floorLimitRange) floorLimitRange.value = String(max);
-    if (floorLimitValue) floorLimitValue.textContent = '—all—';
-    populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, null);
-    render();
-    return;
-  }
-
-  window.DOGE.__isoFloor = lv;
-  window.DOGE.__isoPavPrefix = getPavimentoPrefixForLevel(lv);
-  if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
-  if (floorLimitRange) floorLimitRange.value = String(lv);
-  if (floorLimitValue) floorLimitValue.textContent = String(lv);
-  populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, window.DOGE.__isoPavPrefix);
-
-  // Novo: aplica a FVS selecionada após filtro
-  if (fvsSelect.options.length) {
-    let currentKey = State.CURRENT_FVS_KEY || '';
-    if (![...fvsSelect.options].some(o => o.value === currentKey && !o.disabled)) {
-      currentKey = fvsSelect.options[0].value;
-      State.CURRENT_FVS_KEY = currentKey;
+    if (window.DOGE.__isoFloor === lv) {
+      window.DOGE.__isoFloor = null;
+      window.DOGE.__isoPavPrefix = null;
+      if (typeof applyFloorLimit === 'function') applyFloorLimit(max);
+      if (typeof showAllFloors === 'function') showAllFloors();
+      if (floorLimitRange) floorLimitRange.value = String(max);
+      if (floorLimitValue) floorLimitValue.textContent = '—all—';
+      populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, null);
+      render();
+      return;
     }
-    fvsSelect.value = currentKey;
-    applyFVSSelection(currentKey, fvsIndex);
-  }
 
-  render();
-}, { passive: true });
+    window.DOGE.__isoFloor = lv;
+    window.DOGE.__isoPavPrefix = getPavimentoPrefixForLevel(lv);
+    if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
+    if (floorLimitRange) floorLimitRange.value = String(lv);
+    if (floorLimitValue) floorLimitValue.textContent = String(lv);
+    populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, window.DOGE.__isoPavPrefix);
+
+    if (fvsSelect.options.length) {
+      let currentKey = State.CURRENT_FVS_KEY || '';
+      if (![...fvsSelect.options].some(o => o.value === currentKey && !o.disabled)) {
+        currentKey = fvsSelect.options[0].value;
+        State.CURRENT_FVS_KEY = currentKey;
+      }
+      fvsSelect.value = currentKey;
+      applyFVSSelection(currentKey, fvsIndex);
+    }
+
+    render();
+  }, { passive: true });
   
   setupHudResizeObserver();
 
@@ -619,16 +635,58 @@ function wireEvents(fvsIndex){
   btnNC?.addEventListener('click', () => {
     with2DScrollPreserved(() => {
       State.NC_MODE = !State.NC_MODE;
+      State.IN_PROGRESS_MODE = false;
       const on = !!State.NC_MODE;
       btnNC.setAttribute('aria-pressed', String(on));
       btnNC.classList.toggle('active', on);
-      setQS({ nc: on ? '1' : null });
+      btnInProgress.setAttribute('aria-pressed', 'false');
+      btnInProgress.classList.remove('active');
+      setQS({ nc: on ? '1' : null, inProgress: null });
       const prefs = loadPrefs() || {};
       prefs.nc = on;
+      prefs.inProgress = false;
       savePrefs(prefs);
 
       const pavimentoFilter = window.DOGE?.__isoPavPrefix ?? null;
-      populateFVSSelect(fvsSelect, fvsIndex, on, pavimentoFilter);
+      populateFVSSelect(fvsSelect, fvsIndex, on, false, pavimentoFilter);
+
+      if (State.CURRENT_FVS_KEY && fvsIndex.has(State.CURRENT_FVS_KEY)) {
+        if (![...fvsSelect.options].some(o => o.value === State.CURRENT_FVS_KEY)) {
+          const ord = fvsIndex.__order || Array.from(fvsIndex.keys());
+          State.CURRENT_FVS_KEY = ord[0] || '';
+        }
+        if (State.CURRENT_FVS_KEY) {
+          fvsSelect.value = State.CURRENT_FVS_KEY;
+          applyFVSSelection(State.CURRENT_FVS_KEY, fvsIndex);
+        }
+      } else if (fvsSelect.options.length) {
+        State.CURRENT_FVS_KEY = fvsSelect.options[0].value;
+        fvsSelect.value = State.CURRENT_FVS_KEY;
+        applyFVSSelection(State.CURRENT_FVS_KEY, fvsIndex);
+      }
+
+      render2DCards();
+      render();
+    });
+  });
+
+  btnInProgress?.addEventListener('click', () => {
+    with2DScrollPreserved(() => {
+      State.IN_PROGRESS_MODE = !State.IN_PROGRESS_MODE;
+      State.NC_MODE = false;
+      const on = !!State.IN_PROGRESS_MODE;
+      btnInProgress.setAttribute('aria-pressed', String(on));
+      btnInProgress.classList.toggle('active', on);
+      btnNC.setAttribute('aria-pressed', 'false');
+      btnNC.classList.remove('active');
+      setQS({ inProgress: on ? '1' : null, nc: null });
+      const prefs = loadPrefs() || {};
+      prefs.inProgress = on;
+      prefs.nc = false;
+      savePrefs(prefs);
+
+      const pavimentoFilter = window.DOGE?.__isoPavPrefix ?? null;
+      populateFVSSelect(fvsSelect, fvsIndex, false, on, pavimentoFilter);
 
       if (State.CURRENT_FVS_KEY && fvsIndex.has(State.CURRENT_FVS_KEY)) {
         if (![...fvsSelect.options].some(o => o.value === State.CURRENT_FVS_KEY)) {
@@ -683,7 +741,7 @@ function wireEvents(fvsIndex){
     State.floorLimit = maxLvl2;
 
     (window.DOGE ||= {}).__isoFloor = null;
-    window.DOGE.__isoPavPrefix = null; // Novo: limpa prefixo
+    window.DOGE.__isoPavPrefix = null;
 
     if (typeof applyFloorLimit === 'function') applyFloorLimit(maxLvl2);
     if (typeof showAllFloors === 'function') showAllFloors();
@@ -850,4 +908,3 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
-

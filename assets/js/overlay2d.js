@@ -1,7 +1,3 @@
-// ============================
-// Overlay 2D (grid fixo por pavimento, sempre mostra todos os aptos)
-// ============================
-
 import { State } from './state.js';
 import { hexToRgba, bestRowForName, extractBetweenPavimentoAndNextDash } from './utils.js';
 import { pickFVSColor } from './colors.js';
@@ -12,46 +8,31 @@ import { getLevelIndexForName } from './geometry.js';
 let host = null;
 let getRowsForCurrentFVS = null;
 
-// guarda valores para preservar posição durante mudanças de zoom programáticas
 let _preZoomScrollTop = 0;
 let _preZoomContentH  = 0;
-let _preZoomFocalY    = 0;  // posição dentro do host (px)
+let _preZoomFocalY    = 0;
 let _pendingScrollRestore = false;
-let _keepRestoringScroll = false; // mantém a restauração ativa durante animação
+let _keepRestoringScroll = false;
 let _preZoomScrollLeft = 0;
 let _preZoomContentW   = 0;
 let _preZoomFocalX     = 0;
 
-/** Permite injetar o resolvedor de linhas da FVS ativa */
 export function setRowsResolver(fn){
   getRowsForCurrentFVS = (typeof fn === 'function') ? fn : null;
 }
-
-// ===== Controle de visibilidade do overlay 2D =====
-//let _overlay2dEnabled = false;
-
 
 export function initOverlay2D(){
   host = document.getElementById('cards2d');
   if (!host) return;
 
-  // comportamento de rolagem fixo (sem pinch/zoom nativo)
   host.style.overflowY = 'auto';
   host.style.overflowX = 'hidden';
   host.style.touchAction = 'pan-y';
   host.style.webkitOverflowScrolling = 'touch';
 
-  // defaults do estado de zoom
   if (State.grid2DZoom == null) State.grid2DZoom = 1;
-
-  // IMPORTANTE: desabilitado qualquer binding de pinch/wheel-zoom aqui.
-  // O zoom agora é apenas por botão (hud.js chamará setGridZoom/zoom2DStep).
 }
 
-
-/* ---------- helpers ---------- */
-
-/** Encontra o índice mais próximo no ciclo para o valor atual (considera animação). */
 function _nearestStop(val, stops){
   let best = stops[0], bd = Math.abs(val - best);
   for (const v of stops){
@@ -76,14 +57,10 @@ function _set3DVisibility(hidden){
   cvs.style.visibility = hidden ? 'hidden' : 'visible';
 }
 
-/* ---------- API de zoom por botão (ciclo fixo) ---------- */
-
-// Degraus do ciclo (padrão atual): 1 → 0.75 → 0.5 → 4 → 2 → (volta 1)
 const Z_STOPS = [1, 0.75, 0.5, 4, 2];
 
-export function getMaxGridZoom(){ return 4; } // teto = 4×
+export function getMaxGridZoom(){ return 4; }
 
-/** Anima pra um zoom alvo e preserva posição de leitura. */
 let _zoomRAF = null;
 
 export function setGridZoom(targetZ){
@@ -94,17 +71,15 @@ export function setGridZoom(targetZ){
   const ZMAX = getMaxGridZoom();
   const to = Math.max(ZMIN, Math.min(ZMAX, Number(targetZ) || 1));
 
-  // snapshot do foco para preservar
   const rect = host.getBoundingClientRect();
   _preZoomFocalY    = rect.height * 0.5;
   _preZoomFocalX    = rect.width  * 0.5;
   _preZoomScrollTop = host.scrollTop;
   _preZoomContentH  = host.scrollHeight;
-  _preZoomScrollLeft = host.scrollLeft;           // << novo
+  _preZoomScrollLeft = host.scrollLeft;
   _preZoomContentW   = host.scrollWidth;
   _pendingScrollRestore = true;
 
-  // cancela anima anterior
   if (_zoomRAF) { cancelAnimationFrame(_zoomRAF); _zoomRAF = null; }
 
   const from = Number(State.grid2DZoom || 1);
@@ -118,14 +93,13 @@ export function setGridZoom(targetZ){
   const dur   = 140;
   const ease  = t => 1 - Math.pow(1 - t, 3);
 
-  _keepRestoringScroll = true; // ⟵ mantém restauração ativa durante a animação
+  _keepRestoringScroll = true;
 
   const step = (now)=>{
     const k = Math.min(1, (now - start) / dur);
     const z = from + (to - from) * ease(k);
     State.grid2DZoom = z;
 
-    // garante que cada frame vai restaurar o scroll em render2DCards
     _pendingScrollRestore = true;
     render2DCards();
 
@@ -136,17 +110,14 @@ export function setGridZoom(targetZ){
       State.grid2DZoom = _nearestStop(to, Z_STOPS);
       _pendingScrollRestore = true;
       render2DCards();
-      _keepRestoringScroll = false; // ⟵ terminou a animação
+      _keepRestoringScroll = false;
     }
   };
   _zoomRAF = requestAnimationFrame(step);
 }
 
-
-/** Reseta para 1×. */
 export function resetGridZoom(){ setGridZoom(1); }
 
-/** Avança no ciclo e retorna o novo degrau (ex.: 1→0.75→0.5→4→2→1). */
 export function zoom2DStep(){
   const cur  = _nearestStop(Number(State.grid2DZoom || 1), Z_STOPS);
   const next = _nextStop(cur, Z_STOPS);
@@ -154,7 +125,6 @@ export function zoom2DStep(){
   return next;
 }
 
-/** Retorna o símbolo do botão considerando o PRÓXIMO passo do ciclo. */
 export function getNextGridZoomSymbol(){
   const cur = _nearestStop(Number(State.grid2DZoom || 1), Z_STOPS);
   const nxt = _nextStop(cur, Z_STOPS);
@@ -165,8 +135,6 @@ export function getNextGridZoomSymbolFrom(val){
   const nxt = _nextStop(cur, Z_STOPS);
   return (nxt > cur) ? '+' : '−';
 }
-
-/* ===== Helpers ===== */
 
 function compareApt(a, b){
   const rx = /(\d+)/g;
@@ -180,17 +148,6 @@ function compareApt(a, b){
   return ax.localeCompare(bx, 'pt-BR');
 }
 
-
-/**
- * Constrói bandas por pavimento a partir do LAYOUT (layout-3d.json), SEM fallback.
- * Agrupa e ordena EXCLUSIVAMENTE pelo levelIndex vindo do 3D (alto → baixo).
- * Os rótulos são apenas display; não influenciam na ordenação.
- */
-/**
- * Constrói bandas por pavimento a partir do LAYOUT (layout-3d.json), SEM fallback.
- * AGRUPA e ORDENA EXCLUSIVAMENTE pelo levelIndex do 3D.
- * Nenhuma heurística textual influencia a ordenação.
- */
 function buildFloorsFromApartamentos(){
   const placements = Array.isArray(layoutData?.placements) ? layoutData.placements : [];
   if (!placements.length) return [];
@@ -198,10 +155,8 @@ function buildFloorsFromApartamentos(){
   const split = (name)=> String(name||'').split(/\s*-\s*/g).map(s=>s.trim()).filter(Boolean);
   const join  = (parts,n)=> parts.slice(0,n).join(' - ');
 
-  // Map<levelIndex:number, Map<rootKey:string, { apt, floor, levelIndex, ordemcol, firstIndex, scale, page }>>
   const floorsByIdx = new Map();
 
-  // escala opcional já existente (mantida)
   const S_MIN = 0.35, S_MAX = 1.0;
   const clamp = (v,a,b)=> Math.max(a, Math.min(b, v));
 
@@ -226,10 +181,8 @@ function buildFloorsFromApartamentos(){
     const rootKey = join(parts, rootN);
     if (!rootKey) return;
 
-    // 🔹 novo: página (1, 2, …). Se vier inválido, cai pra 1.
     const page = Math.max(1, Math.floor(Number(p.pagina ?? p.page ?? 1) || 1));
 
-    // (opcional) proporção por card
     const rawScale = Number(p.proporcao ?? p.scale ?? 1);
     const scale    = clamp((Number.isFinite(rawScale) && rawScale > 0) ? rawScale : 1, S_MIN, S_MAX);
 
@@ -247,16 +200,12 @@ function buildFloorsFromApartamentos(){
         page
       });
     } else {
-      // Se o mesmo rootKey aparecer em mais de um placement:
-      // - escala = maior
-      // - página  = menor (prioriza a mais à esquerda)
       const it = byRoot.get(rootKey);
       it.scale = Math.max(it.scale ?? 1, scale);
       it.page  = Math.min(it.page ?? page, page);
     }
   });
 
-  // Pavimentos por levelIndex (desc)
   const sortedLvls = Array.from(floorsByIdx.keys()).sort((a,b)=> b - a);
 
   const sortCards = (A,B)=>{
@@ -285,19 +234,11 @@ function buildFloorsFromApartamentos(){
   return bands;
 }
 
-
-
-
-
-/**
- * Mapa de lookup para a FVS ativa.
- * CHAVE: usa local_origem (antes: apartamento)
- */
 function buildRowsLookup(){
   const rows = (getRowsForCurrentFVS ? (getRowsForCurrentFVS() || []) : []);
   const map = new Map();
   for (const r of rows){
-    const aptName = String(r.local_origem ?? '').trim(); // <<< TROCA PRINCIPAL
+    const aptName = String(r.local_origem ?? '').trim();
     const key = aptName;
     if (!key) continue;
     map.set(key, r);
@@ -311,19 +252,30 @@ function hasNC(row){
   return nc > 0;
 }
 
-// Recolore apenas (quando trocar FVS/tema) mantendo grade fixa
+function hasPend(row){
+  if (!row) return false;
+  const pend = Number(row.qtd_pend_ultima_inspecao ?? row.pendencias ?? 0) || 0;
+  console.log(`[hasPend] row.local_origem=${row.local_origem}, qtd_pend_ultima_inspecao=${row.qtd_pend_ultima_inspecao}, pendencias=${row.pendencias}, pend=${pend}`);
+  return pend > 0;
+}
+
+function isInProgress(row){
+  if (!row) return false;
+  return !row.data_termino_inicial || hasNC(row) || hasPend(row);
+}
+
 export function recolorCards2D(){
   if (!host) return;
 
-  const rowsMap = buildRowsLookup(); // Map<local_origem exato, row>
+  const rowsMap = buildRowsLookup();
   const NC_MODE = !!State.NC_MODE;
+  const IN_PROGRESS_MODE = !!State.IN_PROGRESS_MODE;
 
   const cards = host.querySelectorAll('.card');
   cards.forEach(card=>{
-    const apt = String(card.dataset.apto || '').trim(); // == local_origem do card
+    const apt = String(card.dataset.apto || '').trim();
     const pav = String(card.dataset.pav  || '').trim();
 
-    // Hierarquia EXATA (usa seus helpers _splitHierarchy/_joinHierarchy/bestRowForName)
     const row = bestRowForName(apt, rowsMap);
 
     card._row = row;
@@ -333,10 +285,12 @@ export function recolorCards2D(){
     const pend = Math.max(0, Number(row?.qtd_pend_ultima_inspecao ?? row?.pendencias ?? 0) || 0);
     const perc = Math.max(0, Math.round(Number(row?.percentual_ultima_inspecao ?? row?.percentual ?? 0) || 0));
     const durN = Math.max(0, Math.round(Number(row?.duracao_real ?? row?.duracao ?? row?.duracao_inicial ?? 0) || 0));
+    const inProgress = isInProgress(row);
 
-    const showData = !!row && (!NC_MODE || nc > 0);
+    console.log(`[recolorCards2D] apt=${apt}, nc=${nc}, pend=${pend}, inProgress=${inProgress}, IN_PROGRESS_MODE=${IN_PROGRESS_MODE}, color=${pickFVSColor(apt, pav, State.COLOR_MAP)}`);
 
-    // badges (4 itens quando showData)
+    const showData = !!row && (!NC_MODE || nc > 0) && (!IN_PROGRESS_MODE || inProgress);
+
     let badges = card.querySelector('.badges');
     if (!badges){
       badges = document.createElement('div');
@@ -387,25 +341,23 @@ export function recolorCards2D(){
       badges.appendChild(rowBottom);
     }
 
-    // 🔒 SÓLIDO: sem usar opacity no card
     card.style.mixBlendMode = 'normal';
 
     if (row){
       if (showData){
         const color = pickFVSColor(apt, pav, State.COLOR_MAP);
-        const a = Math.max(0, Math.min(1, Number(State.grid2DAlpha ?? 1))); // 1 = opaco
+        const a = Math.max(0, Math.min(1, Number(State.grid2DAlpha ?? 1)));
         card.style.borderColor = color;
         card.style.backgroundColor = hexToRgba(color, a);
-        card.style.opacity = '1';                   // <- garante sólido
+        card.style.opacity = '1';
         card.style.pointerEvents = 'auto';
         card.style.cursor = 'pointer';
         card.classList.remove('disabled');
         card.title = apt;
       }else{
         card.style.borderColor = 'rgba(110,118,129,.6)';
-        // fundo cinza, mas ainda SÓLIDO
         card.style.backgroundColor = 'rgba(34,40,53,1)';
-        card.style.opacity = '1';                   // <- sem translucidez
+        card.style.opacity = '1';
         card.style.pointerEvents = 'none';
         card.style.cursor = 'default';
         card.classList.add('disabled');
@@ -413,19 +365,25 @@ export function recolorCards2D(){
       }
     }else{
       card.style.borderColor = 'rgba(110,118,129,.6)';
-      // sem dados: mantém clicável (fora de NC) mas SÓLIDO para “tampar” o 3D
       card.style.backgroundColor = 'rgba(34,40,53,1)';
-      card.style.opacity = '1';                     // <- sólido
-      card.style.pointerEvents = NC_MODE ? 'none' : 'auto';
-      card.style.cursor = NC_MODE ? 'default' : 'pointer';
-      if (NC_MODE) card.classList.add('disabled'); else card.classList.remove('disabled');
+      card.style.opacity = '1';
+      card.style.pointerEvents = (NC_MODE || IN_PROGRESS_MODE) ? 'none' : 'auto';
+      card.style.cursor = (NC_MODE || IN_PROGRESS_MODE) ? 'default' : 'pointer';
+      if (NC_MODE || IN_PROGRESS_MODE) card.classList.add('disabled'); else card.classList.remove('disabled');
     }
 
-    // NC mode: realce só nos que têm NC>0 (sem mexer na opacidade)
     if (NC_MODE){
       if (nc > 0){
         card.style.filter = 'none';
         card.style.boxShadow = '0 0 0 2px rgba(248,81,73,.22)';
+      }else{
+        card.style.filter = 'none';
+        card.style.boxShadow = 'none';
+      }
+    }else if (IN_PROGRESS_MODE){
+      if (inProgress){
+        card.style.filter = 'none';
+        card.style.boxShadow = '0 0 0 2px rgba(88,166,255,.22)';
       }else{
         card.style.filter = 'none';
         card.style.boxShadow = 'none';
@@ -437,14 +395,10 @@ export function recolorCards2D(){
   });
 }
 
-
-
-/* ===== Render ===== */
 export function render2DCards(){
   if (!host) initOverlay2D();
   if (!host) return;
 
-  // margem inferior p/ não cobrir HUD
   const hud = document.getElementById('hud');
   const hudH = hud ? hud.offsetHeight : 0;
   host.style.setProperty('bottom', `${hudH}px`, 'important');
@@ -452,23 +406,19 @@ export function render2DCards(){
   const perFloor = buildFloorsFromApartamentos();
   const rowsMap  = buildRowsLookup();
   const NC_MODE  = !!State.NC_MODE;
+  const IN_PROGRESS_MODE = !!State.IN_PROGRESS_MODE;
 
-  // (1) prepara DOM
   host.innerHTML = '';
   const frag = document.createDocumentFragment();
 
-  // 🔹 quantas páginas existem (maior "page" visto)
   let maxPage = 1;
   perFloor.forEach(b => b.items.forEach(it => { maxPage = Math.max(maxPage, Number(it.page||1)); }));
 
-  // 🔹 ativa/desativa scroll horizontal e snap
   host.style.overflowX = (maxPage > 1) ? 'auto' : 'hidden';
   host.style.overflowY = 'auto';
   host.style.scrollSnapType = (maxPage > 1) ? 'x mandatory' : 'none';
-  host.style.touchAction = (maxPage > 1) ? 'pan-x pan-y' : 'pan-y'; // pinch-zoom continua desabilitado
+  host.style.touchAction = (maxPage > 1) ? 'pan-x pan-y' : 'pan-y';
 
-  // (2) cria “marcadores” de página para o snap
-  // cada página ocupa exatamente a largura visível; cards são posicionados por offset
   const paneW = Math.max(240, host.clientWidth);
   const paneH = Math.max(180, host.clientHeight);
   for (let p = 1; p <= maxPage; p++){
@@ -484,7 +434,6 @@ export function render2DCards(){
     frag.appendChild(snap);
   }
 
-  // (3) cria os cards normalmente
   for (const band of perFloor){
     for (const it of band.items){
       const key = it.apt;
@@ -516,12 +465,13 @@ export function render2DCards(){
       const pend = Math.max(0, Number(row?.qtd_pend_ultima_inspecao ?? row?.pendencias ?? 0) || 0);
       const perc = Math.max(0, Math.round(Number(row?.percentual_ultima_inspecao ?? row?.percentual ?? 0) || 0));
       const durN = Math.max(0, Math.round(Number(row?.duracao_real ?? row?.duracao ?? row?.duracao_inicial ?? 0) || 0));
-      const showData = !!row && (!NC_MODE || nc > 0);
+      const inProgress = isInProgress(row);
+
+      const showData = !!row && (!NC_MODE || nc > 0) && (!IN_PROGRESS_MODE || inProgress);
 
       if (showData){
         const badges = document.createElement('div');
         badges.className = 'badges';
-        // linha 1
         {
           const rowTop = document.createElement('div');
           rowTop.className = 'badge-row';
@@ -533,7 +483,6 @@ export function render2DCards(){
           rowTop.append(left, right);
           badges.appendChild(rowTop);
         }
-        // linha 2
         {
           const rowBottom = document.createElement('div');
           rowBottom.className = 'badge-row';
@@ -572,9 +521,9 @@ export function render2DCards(){
         el.style.borderColor = 'rgba(110,118,129,.6)';
         el.style.backgroundColor  = 'rgba(34,40,53,.95)';
         el.style.opacity     = '1';
-        el.style.pointerEvents = NC_MODE ? 'none' : 'auto';
-        el.style.cursor = NC_MODE ? 'default' : 'pointer';
-        if (NC_MODE) el.classList.add('disabled'); else el.classList.remove('disabled');
+        el.style.pointerEvents = (NC_MODE || IN_PROGRESS_MODE) ? 'none' : 'auto';
+        el.style.cursor = (NC_MODE || IN_PROGRESS_MODE) ? 'default' : 'pointer';
+        if (NC_MODE || IN_PROGRESS_MODE) el.classList.add('disabled'); else el.classList.remove('disabled');
       }
 
       frag.appendChild(el);
@@ -584,7 +533,6 @@ export function render2DCards(){
 
   host.appendChild(frag);
 
-  // clique → modal
   host.onclick = (e) => {
     const card = e.target.closest('.card');
     if (!card || card.classList.contains('disabled')) return;
@@ -597,7 +545,6 @@ export function render2DCards(){
     openAptModal({ id: apt, floor: pav, row, tintHex: hex });
   };
 
-  // ====== Layout (com páginas) ======
   const RATIO = 120/72;
   const MIN_W = 60, MIN_H = 40;
   const MAX_H = 160;
@@ -612,7 +559,6 @@ export function render2DCards(){
   let cardW = Math.max(MIN_W, Math.floor(cardH * RATIO));
   let fontPx = Math.max(10, Math.floor(cardH * 0.24));
 
-  // (i) ajusta base se alguma página estourar horizontalmente (considerando escala por card)
   const S_MIN = 0.35, S_MAX = 1.0;
   const clampScale = (v)=> Math.max(S_MIN, Math.min(S_MAX, Number(v)||1));
   const widthOf = (w, s)=> Math.floor(w * clampScale(s));
@@ -623,7 +569,6 @@ export function render2DCards(){
     return sum + Math.max(0, items.length - 1) * gap;
   };
 
-  // verifica cada página de cada pavimento
   let TWmax = 0;
   for (const band of perFloor){
     const byPage = new Map();
@@ -644,7 +589,6 @@ export function render2DCards(){
     hGap  = Math.max(8, Math.floor(hGap  * sx));
   }
 
-  // variáveis dos badges
   const badgeFont = Math.max(8,  Math.min(16, Math.round(cardH * 0.15)));
   const badgePadV = Math.max(2,  Math.round(cardH * 0.055));
   const badgePadH = Math.max(4,  Math.round(cardW * 0.08));
@@ -662,9 +606,7 @@ export function render2DCards(){
   const topPad  = 16;
   let cursorY   = topPad;
 
-  // posiciona por pavimento, mas agora separando por página
   for (const band of perFloor){
-    // agrupa cards desta banda por página
     const byPage = new Map();
     band.items.forEach(it=>{
       const p = Number(it.page || 1);
@@ -672,7 +614,6 @@ export function render2DCards(){
       byPage.get(p).push(it);
     });
 
-    // para cada página: calcula largura e posiciona com offsetX = (page-1)*paneW
     const rowCenterY = cursorY + Math.floor(cardH/2);
 
     for (let p = 1; p <= maxPage; p++){
@@ -708,59 +649,44 @@ export function render2DCards(){
     cursorY += cardH + vGap;
   }
 
-// ===== restaura scroll se necessário =====
-if (_pendingScrollRestore){
-  // vertical
-  const newH = host.scrollHeight || 1;
-  const oldH = _preZoomContentH || 1;
-  const ratioY = newH / oldH;
-  const desiredTop = ((_preZoomScrollTop + _preZoomFocalY) * ratioY) - _preZoomFocalY;
-  const maxTop = Math.max(0, newH - host.clientHeight);
-  host.scrollTop = Math.max(0, Math.min(maxTop, desiredTop));
+  if (_pendingScrollRestore){
+    const newH = host.scrollHeight || 1;
+    const oldH = _preZoomContentH || 1;
+    const ratioY = newH / oldH;
+    const desiredTop = ((_preZoomScrollTop + _preZoomFocalY) * ratioY) - _preZoomFocalY;
+    const maxTop = Math.max(0, newH - host.clientHeight);
+    host.scrollTop = Math.max(0, Math.min(maxTop, desiredTop));
 
-  // horizontal (página)
-  const newW = host.scrollWidth || 1;
-  const oldW = _preZoomContentW || 1;
-  const ratioX = newW / oldW;
-  const desiredLeft = ((_preZoomScrollLeft + _preZoomFocalX) * ratioX) - _preZoomFocalX;
-  const maxLeft = Math.max(0, newW - host.clientWidth);
-  host.scrollLeft = Math.max(0, Math.min(maxLeft, desiredLeft));
+    const newW = host.scrollWidth || 1;
+    const oldW = _preZoomContentW || 1;
+    const ratioX = newW / oldW;
+    const desiredLeft = ((_preZoomScrollLeft + _preZoomFocalX) * ratioX) - _preZoomFocalX;
+    const maxLeft = Math.max(0, newW - host.clientWidth);
+    host.scrollLeft = Math.max(0, Math.min(maxLeft, desiredLeft));
 
-  _pendingScrollRestore = false;
+    _pendingScrollRestore = false;
 
-  // fallback caso ainda não tenha cards
-  if (!host.querySelector('.card')) {
-    requestAnimationFrame(()=> render2DCards());
+    if (!host.querySelector('.card')) {
+      requestAnimationFrame(()=> render2DCards());
+    }
   }
 }
 
-
-  // opcional: se você quiser começar sempre na página 1 ao entrar no 2D:
-  // host.scrollLeft = 0;
-}
-
-
-// === Efeito "esfumaçado" no 3D quando o 2D estiver ativo ===
 function _set3DFog(on){
-  // aplica no canvas principal do THREE
   const cvs = document.querySelector('canvas');
   if (!cvs) return;
   cvs.style.transition = 'filter 140ms ease';
-  // blur + redução de brilho/contraste p/ o 3D “ficar atrás”
   cvs.style.filter = on
     ? 'blur(3px) brightness(0.85) contrast(0.9) saturate(0.9)'
     : '';
 }
-
-
 
 export function show2D(){
   if (!host) initOverlay2D();
   if (!host) return;
   host.classList.add('active');
   host.style.pointerEvents = 'auto';
-  _set3DVisibility(true);   // 🔴 esconde o canvas 3D
-  // opcional: se quiser o blur em vez de esconder, pode chamar _set3DFog(true)
+  _set3DVisibility(true);
   render2DCards();
 }
 
@@ -769,6 +695,5 @@ export function hide2D(){
   if (!host) return;
   host.classList.remove('active');
   host.style.pointerEvents = 'none';
-  _set3DVisibility(false);  // 🟢 mostra o canvas 3D
-  // opcional: _set3DFog(false)
+  _set3DVisibility(false);
 }

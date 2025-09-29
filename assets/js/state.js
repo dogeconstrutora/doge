@@ -5,6 +5,7 @@
 export const STORAGE_KEYS = {
   FVS: 'doge.viewer.fvs',
   NC:  'doge.viewer.nc',
+  IN_PROGRESS: 'doge.viewer.inProgress', // Novo
 };
 
 export const State = {
@@ -16,6 +17,7 @@ export const State = {
   // ==== Filtros / cores ====
   CURRENT_FVS: '',
   NC_MODE: false,
+  IN_PROGRESS_MODE: false, // Novo
   COLOR_MAP: { default: '#6e7681', colors: {}, byFloor: {} },
   META_MAP: new Map(),
 
@@ -54,22 +56,25 @@ export function setQS(updates){
 // ----------------------
 // Prefs (localStorage)
 // ----------------------
-export function savePrefs(){
-  try{
+export function savePrefs() {
+  try {
     if (State.CURRENT_FVS) localStorage.setItem(STORAGE_KEYS.FVS, State.CURRENT_FVS);
     localStorage.setItem(STORAGE_KEYS.NC, String(!!State.NC_MODE));
-  }catch(_){}
+    localStorage.setItem(STORAGE_KEYS.IN_PROGRESS, String(!!State.IN_PROGRESS_MODE)); // Novo
+  } catch {}
 }
 
-export function loadPrefs(){
-  let fvs = null, nc = null;
-  try{
+export function loadPrefs() {
+  let fvs = null, nc = null, inProgress = null;
+  try {
     fvs = localStorage.getItem(STORAGE_KEYS.FVS);
-    nc  = localStorage.getItem(STORAGE_KEYS.NC);
-  }catch(_){}
+    nc = localStorage.getItem(STORAGE_KEYS.NC);
+    inProgress = localStorage.getItem(STORAGE_KEYS.IN_PROGRESS); // Novo
+  } catch {}
   return {
     fvs: fvs || '',
-    nc : (nc === 'true')
+    nc: (nc === 'true'),
+    inProgress: (inProgress === 'true'), // Novo
   };
 }
 
