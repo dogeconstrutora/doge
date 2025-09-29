@@ -68,6 +68,20 @@ export function bestRowForName(rawName, mapByName){
   return null;
 }
 
+/**
+ * Verifica se o fullName matcha o prefixo hierárquico (subindo partes).
+ * Ex.: prefix "Torre - Pavimento 25 - " matcha "Torre - Pavimento 25 - Apto 2501".
+ */
+export function isHierarchyMatch(fullName, prefix) {
+  const fullParts = splitHierarchy(fullName);
+  const prefixParts = splitHierarchy(prefix);
+  if (prefixParts.length > fullParts.length) return false;
+  for (let i = 0; i < prefixParts.length; i++) {
+    if (prefixParts[i] !== fullParts[i]) return false;
+  }
+  return true;
+}
+
 export function extractBetweenPavimentoAndNextDash(full){
   if (!full) return '';
   const re = /Pavimento\s+\d+\s*-\s*([^-\n\r]+)(?:\s*-\s*.*)?/i;
@@ -177,4 +191,5 @@ export function hexToRgba(hex, alpha = 1){
   const g = (n >> 8) & 255;
   const b = n & 255;
   return `rgba(${r},${g},${b},${alpha})`;
+
 }
