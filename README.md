@@ -1,94 +1,50 @@
-# FVS Grid
+# Apartment Status Dashboard
 
-Visualização de FVS x Apartamentos hospedada no GitHub Pages, com HTML, CSS e JS separados.
+![Apartment Status Dashboard](https://via.placeholder.com/800x400.png?text=Apartment+Status+Dashboard) *(Substitua por uma captura de tela real da aplicação, se disponível)*
 
-## Objetivo do projeto
-Fornecer uma visualização interativa da relação entre as fichas de verificação de serviços (FVS) e os apartamentos, facilitando o acompanhamento das inspeções diretamente no navegador.
+O **Apartment Status Dashboard** é uma aplicação web interativa desenvolvida para visualizar e gerenciar o status de apartamentos em um projeto de construção ou inspeção. Com uma interface intuitiva, a aplicação permite filtrar e destacar apartamentos com base em seu progresso, pendências e não conformidades, utilizando uma representação visual colorida e organizada. Construído com HTML, CSS e JavaScript puro, o projeto é leve, modular e fácil de integrar.
 
-## Estrutura de pastas
-```
-/ (raiz do repositório)
-├─ index.html
-└─ assets/
-   ├─ css/
-   │  └─ style.css
-   └─ js/
-      └─ main.js
-```
+## Funcionalidades
 
-## Instalação local
-1. Certifique-se de ter o **Python 3** ou o **Node.js** instalados no sistema.
-2. Clone este repositório e acesse a pasta do projeto.
-3. Inicie um servidor local:
-   - Python 3: `python -m http.server 8080`
-   - Node.js (http-server): `npx http-server -p 8080`
-4. Abra `http://localhost:8080` no navegador para visualizar.
+- **Visualização de Status com Cores**:
+  - **Azul** (#4493f8): Apartamentos em andamento (sem `data_termino_inicial`).
+  - **Amarelo** (#e3b341): Apartamentos finalizados com pendências (`qtd_pend_ultima_inspecao > 0`).
+  - **Vermelho** (#f85149): Apartamentos com não conformidades (`qtd_nao_conformidades_ultima_inspecao > 0`).
+  - **Verde** (#3fb950): Apartamentos finalizados perfeitamente (100% concluídos, sem pendências ou NC).
+  - **Cinza** (#6b7280): Apartamentos sem dados ou finalizados (usado como padrão).
 
-## Publicação no GitHub Pages
-1. Faça commit de `index.html` e da pasta `assets/` no repositório.
-2. No repositório, acesse **Settings → Pages**.
-3. Em **Source**, selecione **Deploy from a branch**.
-4. Branch: **main** e pasta **/** (root). Salve.
-5. A página ficará disponível em `https://SEU_USUARIO.github.io/NOME_DO_REPO/`.
+- **Filtros Interativos**:
+  - **Modo "Em Andamento"**: Exibe apenas apartamentos em andamento (azuis), com pendências (amarelos) ou com não conformidades (vermelhos), ocultando os finalizados perfeitamente (verdes). O botão usa um círculo verde (inativo) que muda para cinza (ativo) com um efeito brilhante.
+  - **Modo "NC" (Não Conformidades)**: Destaca apartamentos com não conformidades em vermelho, ocultando os demais.
+  - **Seleção de Pavimento**: Um dropdown permite filtrar apartamentos por pavimento, mantendo a visualização focada.
 
-## Configuração das fontes de dados
-No arquivo `assets/js/main.js`:
-```js
-const DATA_BASE = 'https://dogeconstrutora.github.io/doge/data';
-const FVS_LIST_URL = `${DATA_BASE}/fvs-list.json`;
-const APARTAMENTOS_URL = `${DATA_BASE}/apartamentos.json`;
-const ESTRUTURA_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-.../pub?output=csv';
-```
-Ajustar as URLs conforme o local dos arquivos. Os JSON devem estar públicos. A planilha do CSV deve estar publicada (Publish to web).
+- **Interface de Cartões 2D**:
+  - Exibe cartões para cada apartamento com informações detalhadas (pendências, NC, percentual concluído, duração).
+  - Cartões são coloridos de acordo com o status e interativos, com suporte a cliques para mais detalhes.
 
-## Funcionamento
-1. Carrega `fvs-list.json` e popula o dropdown.
-2. Ao selecionar uma FVS: carrega `apartamentos.json`, filtra pela FVS e busca o CSV da estrutura.
-3. Renderiza o SVG do prédio e habilita o modal de detalhes ao clicar em um apartamento com dados.
+- **Preservação de Estado**:
+  - Preferências do usuário (modo NC, modo Em Andamento, pavimento selecionado) são salvas localmente usando `prefs.js`.
+  - A posição de rolagem da visualização 2D é preservada ao alternar filtros.
 
-## Personalização
-- Cores: editar variáveis CSS em `:root` no `style.css`.
-- Tamanho padrão das células: `DEFAULT_CELL_WIDTH` e `DEFAULT_CELL_HEIGHT` em `main.js`.
-- Link externo no modal: ajustar na função `abrirModalDetalhes` em `main.js`.
+- **Acessibilidade**:
+  - Botões com `aria-label` e `aria-pressed` para compatibilidade com leitores de tela.
+  - Títulos descritivos (`title`) para botões, garantindo clareza para todos os usuários.
 
-## Cache busting
-- Renomear arquivos (ex.: `style.v2.css`, `main.v2.js`) e atualizar referências no `index.html`, ou
-- Usar query string (ex.: `style.css?v=2`, `main.js?v=2`).
+## Tecnologias Utilizadas
 
-@@ -58,34 +61,36 @@ Ajustar as URLs conforme o local dos arquivos. Os JSON devem estar públicos. A
-- Erros 403/404/CORS: conferir caminhos e permissões públicas.
-- Modal sem dados: apartamento inexistente no `apartamentos.json` da FVS selecionada.
+- **HTML5**: Estrutura da interface, incluindo botões e contêineres para cartões.
+- **CSS3**: Estilização responsiva com transições suaves, bordas brilhantes e design moderno (usando `clamp` para escalabilidade).
+- **JavaScript (ES6+)**: Lógica de filtros, manipulação de dados e renderização dinâmica.
+  - **Módulos**: `hud.js` (eventos de UI), `overlay2d.js` (renderização de cartões 2D), `colors.js` (lógica de cores), `state.js` (gerenciamento de estado), `qs.js` (query string), `prefs.js` (preferências), `fvs.js` (seleção de pavimento), `render.js` (renderização geral).
 
-## Exemplo mínimo de `apartamentos.json`
-```json
-[
-  {
-    "fvs": "FVS-123",
-    "apartamento": "301",
-    "data_abertura": "2025-07-01",
-    "data_termino_inicial": null,
-    "duracao_inicial": 10,
-    "percentual_ultima_inspecao": 65,
-    "qtd_pend_ultima_inspecao": 2,
-    "duracao_reaberturas": 3,
-    "duracao_real": 13,
-    "termino_final": null,
-    "reaberturas": [
-      { "codigo": "102", "data_abertura": "2025-07-10", "qtd_itens_pendentes": 2 }
-    ],
-    "id_ultima_inspecao": "abcdef"
-  }
-]
-```
+## Como Executar
 
-## Licença e créditos
-Este projeto está disponível sob a licença MIT; consulte o arquivo `LICENSE` para mais detalhes.
+### Pré-requisitos
+- Um navegador moderno (Chrome, Firefox, Edge, etc.).
+- Um servidor web local (ex.: `http-server`, Live Server no VS Code) para carregar os arquivos corretamente devido ao uso de módulos ES6.
 
-Créditos: equipe da Doge Construtora e demais colaboradores.
-
-## Checklist de deploy
-- [ ] `index.html` na raiz
-- [ ] `assets/css/style.css` e `assets/js/main.js` nos caminhos corretos
-- [ ] URLs de dados revisadas
-- [ ] GitHub Pages ativado em Settings → Pages
-- [ ] Teste da URL pública em janela anônima
+### Passos
+1. Clone o repositório:
+   ```bash
+   git clone https://github.com/seu-usuario/apartment-status-dashboard.git
+   cd apartment-status-dashboard
