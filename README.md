@@ -1,6 +1,5 @@
 # Apartment Status Dashboard
 
-![Apartment Status Dashboard](https://via.placeholder.com/800x400.png?text=Apartment+Status+Dashboard) *(Substitua por uma captura de tela real da aplicação, se disponível)*
 
 O **Apartment Status Dashboard** é uma aplicação web interativa desenvolvida para visualizar e gerenciar o status de apartamentos em um projeto de construção ou inspeção. Com uma interface intuitiva, a aplicação permite filtrar e destacar apartamentos com base em seu progresso, pendências e não conformidades, utilizando uma representação visual colorida e organizada. Construído com HTML, CSS e JavaScript puro, o projeto é leve, modular e fácil de integrar.
 
