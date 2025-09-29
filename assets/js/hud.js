@@ -336,35 +336,47 @@ export function initHUD(){
   (window.DOGE ||= {}).__isoFloor ??= null;
   window.DOGE.__isoPavPrefix ??= null; // Novo: armazena prefixo textual do pavimento isolado
 
-  window.addEventListener('doge:isolate-floor', (ev) => {
-    const d = ev?.detail || {};
-    let lv = Number(d.levelIdx);
-    if (!Number.isFinite(lv)) return;
+ window.addEventListener('doge:isolate-floor', (ev) => {
+  const d = ev?.detail || {};
+  let lv = Number(d.levelIdx);
+  if (!Number.isFinite(lv)) return;
 
-    const max = Number(getMaxLevel?.() ?? 0) || 0;
-    const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
+  const max = Number(getMaxLevel?.() ?? 0) || 0;
+  const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
 
-    if (window.DOGE.__isoFloor === lv) {
-      window.DOGE.__isoFloor = null;
-      window.DOGE.__isoPavPrefix = null; // Limpa prefixo
-      if (typeof applyFloorLimit === 'function') applyFloorLimit(max);
-      if (typeof showAllFloors === 'function') showAllFloors();
-      if (floorLimitRange) floorLimitRange.value = String(max);
-      if (floorLimitValue) floorLimitValue.textContent = '—all—';
-      populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, null);
-      render();
-      return;
-    }
-
-    window.DOGE.__isoFloor = lv;
-    window.DOGE.__isoPavPrefix = getPavimentoPrefixForLevel(lv); // Calcula prefixo
-    if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
-    if (floorLimitRange) floorLimitRange.value = String(lv);
-    if (floorLimitValue) floorLimitValue.textContent = String(lv);
-    populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, window.DOGE.__isoPavPrefix);
+  if (window.DOGE.__isoFloor === lv) {
+    window.DOGE.__isoFloor = null;
+    window.DOGE.__isoPavPrefix = null;
+    if (typeof applyFloorLimit === 'function') applyFloorLimit(max);
+    if (typeof showAllFloors === 'function') showAllFloors();
+    if (floorLimitRange) floorLimitRange.value = String(max);
+    if (floorLimitValue) floorLimitValue.textContent = '—all—';
+    populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, null);
     render();
-  }, { passive: true });
+    return;
+  }
 
+  window.DOGE.__isoFloor = lv;
+  window.DOGE.__isoPavPrefix = getPavimentoPrefixForLevel(lv);
+  if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
+  if (floorLimitRange) floorLimitRange.value = String(lv);
+  if (floorLimitValue) floorLimitValue.textContent = String(lv);
+  populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, window.DOGE.__isoPavPrefix);
+
+  // Novo: aplica a FVS selecionada após filtro
+  if (fvsSelect.options.length) {
+    let currentKey = State.CURRENT_FVS_KEY || '';
+    if (![...fvsSelect.options].some(o => o.value === currentKey && !o.disabled)) {
+      currentKey = fvsSelect.options[0].value;
+      State.CURRENT_FVS_KEY = currentKey;
+    }
+    fvsSelect.value = currentKey;
+    applyFVSSelection(currentKey, fvsIndex);
+  }
+
+  render();
+}, { passive: true });
+  
   setupHudResizeObserver();
 
   const hudHandle = document.getElementById('hudHandle');
@@ -838,3 +850,4 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
+
