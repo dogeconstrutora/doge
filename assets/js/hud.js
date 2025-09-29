@@ -3,10 +3,11 @@
 // ============================
 
 import { State, savePrefs, loadPrefs, getQS, setQS } from './state.js';
-import { applyModalTint } from './modal.js'; // garanta esse import no topo
+import { applyModalTint } from './modal.js';
 import {
   setFaceOpacity, applyExplode, recolorMeshes3D, apply2DVisual,
-  getMaxLevelIndex, getLevelIndexForName, showOnlyFloor, showAllFloors, applyFloorLimit, getMaxLevel
+  getMaxLevelIndex, getLevelIndexForName, showOnlyFloor, showAllFloors, applyFloorLimit, getMaxLevel,
+  getPavimentoPrefixForLevel // Novo: importar a função
 } from './geometry.js';
 import {
   render2DCards, recolorCards2D, show2D, hide2D,
@@ -16,8 +17,8 @@ import {
 import { buildColorMapForFVS, buildColorMapForFVS_NC } from './colors.js';
 import { syncSelectedColor, setRowResolver as setRowResolver3D, clear3DHighlight } from './picking.js';
 import { recenterCamera, INITIAL_THETA, INITIAL_PHI, render } from './scene.js';
-import { normFVSKey, bestRowForName } from './utils.js';
-import { apartamentos, fvsList } from './data.js'; // << usa lista global fvs-list_by_obra.json
+import { normFVSKey, bestRowForName, isHierarchyMatch } from './utils.js'; // Novo: importar isHierarchyMatch
+import { apartamentos, fvsList } from './data.js';
 
 // ---- elementos
 let hudEl, rowSliders, fvsSelect, btnNC, opacityRange, explodeXYRange, explodeYRange, btn2D, btnZoom2D, btnResetAll, floorLimitRange, floorLimitGroup, floorLimitValue;
@@ -38,8 +39,8 @@ function buildFVSIndexFromLists(fvsStrings, apts) {
         label: String(label),
         rows: [],
         rowsByNameKey: new Map(),
-        counts: { total: 0, withNC: 0 }, // Mantém global para casos sem filtro por pavimento
-        levels: new Set()
+        counts: { total: 0, withNC: 0 },
+        levels: new Set() // Mantém para compatibilidade, mas não usaremos diretamente
       });
       order.push(key);
     }
@@ -63,17 +64,20 @@ function buildFVSIndexFromLists(fvsStrings, apts) {
       b.rowsByNameKey.set(exactKey, r);
       const levelIdx = getLevelIndexForName(exactKey);
       if (Number.isFinite(levelIdx)) {
-        r.__levelIdx = levelIdx; // Novo: armazena levelIdx diretamente no row para filtros futuros
+        r.__levelIdx = levelIdx; // Mantém para compatibilidade
         b.levels.add(levelIdx);
+      } else {
+        console.warn(`[hud] Não foi possível associar levelIdx para row:`, r);
       }
     } else {
-      console.warn(`[hud] Apartamento sem exactKey (nome/local_origem):`, r); // Log para debug de vinculação falha
+      console.warn(`[hud] Apartamento sem exactKey (nome/local_origem):`, r);
     }
   }
 
   Object.defineProperty(buckets, '__order', { value: order, enumerable: false });
   return buckets;
 }
+
 // === Compat: applyFVSAndRefresh (chamada pelo viewer.js) ===
 export function applyFVSAndRefresh(){
   const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
@@ -81,14 +85,13 @@ export function applyFVSAndRefresh(){
   let key = State.CURRENT_FVS_KEY || '';
   if (!key && State.CURRENT_FVS_LABEL) key = normFVSKey(State.CURRENT_FVS_LABEL);
 
-  // escolhe primeira da ordem oficial se necessário
   if (!key || !fvsIndex.has(key)){
     const ord = fvsIndex.__order || Array.from(fvsIndex.keys());
     key = ord[0] || '';
   }
 
   if (fvsSelect) {
-    populateFVSSelect(fvsSelect, fvsIndex, /*showNCOnly=*/!!State.NC_MODE);
+    populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, window.DOGE?.__isoPavPrefix ?? null);
     if (key && fvsIndex.has(key)) fvsSelect.value = key;
   }
 
@@ -98,7 +101,7 @@ export function applyFVSAndRefresh(){
   render();
 }
 
-function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = null) {
+function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, pavimentoFilter = null) {
   if (!selectEl) return;
 
   const prevVal = selectEl.value;
@@ -114,31 +117,26 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = nu
     const b = fvsIndex.get(k);
     if (!b) continue;
 
-    // Filtra por levelIdx, se especificado (usa levels.has para inclusão rápida)
-    if (Number.isFinite(levelIdx) && !b.levels.has(levelIdx)) continue;
-
-    // Novo: calcula counts dinamicamente, restrito ao levelIdx se definido
+    // Filtra por pavimentoFilter (prefixo hierárquico)
     let filteredRows = b.rows;
-    if (Number.isFinite(levelIdx)) {
-      filteredRows = b.rows.filter(r => r.__levelIdx === levelIdx);
+    if (pavimentoFilter) {
+      filteredRows = b.rows.filter(r => isHierarchyMatch(r.local_origem ?? r.nome ?? '', pavimentoFilter));
     }
     const total = filteredRows.length;
+    if (total === 0) continue;
+
     const withNC = filteredRows.reduce((acc, r) => {
       const ncVal = Number(r.qtd_nao_conformidades_ultima_inspecao ?? r.nao_conformidades ?? 0) || 0;
       return acc + (ncVal > 0 ? 1 : 0);
     }, 0);
 
-    const c = { total, withNC };
-
-    // Só inclui se há apartamentos no filtro (total > 0) e passa no filtro NC
-    if (total === 0) continue;
     if (showNCOnly && withNC === 0) continue;
 
     const opt = document.createElement('option');
     opt.value = k;
     opt.textContent = showNCOnly
-      ? `${b.label} (NC:${c.withNC})`
-      : `${b.label} (${c.total})`;
+      ? `${b.label} (NC:${withNC})`
+      : `${b.label} (${total})`;
     selectEl.appendChild(opt);
     added++;
   }
@@ -152,13 +150,14 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = nu
     opt.selected = true;
     selectEl.appendChild(opt);
   } else if (added === 0) {
-    // Repopula respeitando levelIdx (sem NC)
     for (const k of keys) {
       const b = fvsIndex.get(k);
       if (!b) continue;
-      if (Number.isFinite(levelIdx) && !b.levels.has(levelIdx)) continue;
 
-      const filteredRows = Number.isFinite(levelIdx) ? b.rows.filter(r => r.__levelIdx === levelIdx) : b.rows;
+      let filteredRows = b.rows;
+      if (pavimentoFilter) {
+        filteredRows = b.rows.filter(r => isHierarchyMatch(r.local_origem ?? r.nome ?? '', pavimentoFilter));
+      }
       const total = filteredRows.length;
       if (total === 0) continue;
 
@@ -178,7 +177,7 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = nu
     }
   }
 
-  // Restaura seleção anterior ou escolhe a primeira válida (ignora disabled)
+  // Restaura seleção anterior ou escolhe a primeira válida
   if (prevVal && [...selectEl.options].some(o => o.value === prevVal && !o.disabled)) {
     selectEl.value = prevVal;
   } else if (selectEl.options.length > 0) {
@@ -186,14 +185,10 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, levelIdx = nu
     if (firstValid) {
       selectEl.value = firstValid.value;
     } else {
-      // Se só placeholder, seta vazio
       State.CURRENT_FVS_KEY = '';
     }
   }
 }
-
-// === Helpers de Hierarquia (match do mais específico para o mais genérico) ===
-// (bestRowForName já importado de utils.js)
 
 function applyFVSSelection(fvsKey, fvsIndex){
   const bucket = fvsIndex.get(fvsKey);
@@ -202,10 +197,8 @@ function applyFVSSelection(fvsKey, fvsIndex){
   State.CURRENT_FVS_KEY   = fvsKey;
   State.CURRENT_FVS_LABEL = bucket?.label || '';
 
-  // 2D recebe lista bruta da FVS selecionada
   setRowsResolver2D(() => rows);
 
-  // 3D: tenta match exato; se não houver, sobe na hierarquia textual exata
   const byName = bucket?.rowsByNameKey || new Map();
   setRowResolver3D((rawName)=>{
     const nm = String(rawName||'').trim();
@@ -213,7 +206,6 @@ function applyFVSSelection(fvsKey, fvsIndex){
     return bestRowForName(nm, byName);
   });
 
-  // Mapas de cor (ver colors.js)
   State.COLOR_MAP = State.NC_MODE
     ? buildColorMapForFVS_NC(rows)
     : buildColorMapForFVS(rows);
@@ -228,7 +220,6 @@ function applyFVSSelection(fvsKey, fvsIndex){
 // Inicialização pública
 // ============================
 export function initHUD(){
-  // refs
   hudEl        = document.getElementById('hud');
   fvsSelect    = document.getElementById('fvsSelect');
   btnNC        = document.getElementById('btnNC');
@@ -241,7 +232,6 @@ export function initHUD(){
   explodeXYRange = document.getElementById('explodeXY');
   explodeYRange  = document.getElementById('explodeY');
 
-  // --- Slider de pavimento (“escadinha”) ---
   floorLimitRange = document.getElementById('floorLimit');
   floorLimitValue = document.getElementById('floorLimitValue');
   floorLimitGroup = document.getElementById('floorLimitGroup')
@@ -250,7 +240,7 @@ export function initHUD(){
 
   if (!hudEl) return;
 
-  // ===== Tela inicial: garantir obra escolhida =====
+  // Tela inicial: garantir obra escolhida
   {
     const qs        = new URL(location.href).searchParams;
     const obraQS    = qs.get('obra') || '';
@@ -267,36 +257,31 @@ export function initHUD(){
     }
   }
 
-  // Prefs + QS
   const prefs = loadPrefs();
   const qsFvs = getQS('fvs');
   const qsNc  = getQS('nc');
   State.NC_MODE = (qsNc != null) ? (qsNc === '1' || qsNc === 'true') : !!prefs.nc;
 
-  // estado visual do NC
   btnNC?.setAttribute('aria-pressed', String(!!State.NC_MODE));
   btnNC?.classList.toggle('active', !!State.NC_MODE);
 
-  // sliders compactos
   [opacityRange, explodeXYRange, explodeYRange].forEach(inp=>{
     if (!inp) return;
     inp.classList.add('slim');
     inp.style.maxWidth = '140px';
   });
 
-  // valores iniciais
   if (explodeXYRange) explodeXYRange.value = String(State.explodeXY ?? 0);
   if (explodeYRange)  explodeYRange.value  = String(State.explodeY  ?? 0);
   if (opacityRange)   opacityRange.value   = String(Math.round((State.faceOpacity ?? 1) * 100));
 
-  // ===== 2D: só esconder a “escadinha” + esconder linha de sliders =====
   const is2D = (State.flatten2D >= 0.95);
   btn2D?.setAttribute('aria-pressed', String(is2D));
   btn2D?.classList.toggle('active', is2D);
 
   const floorLabel = document.querySelector('label[for="floorLimit"]');
 
-  const toggle2DUI = (on /* true=2D ligado */) => {
+  const toggle2DUI = (on) => {
     if (rowSliders) rowSliders.style.display = on ? 'none' : '';
     [floorLabel, floorLimitRange, floorLimitValue].forEach(el=>{
       if (el) el.style.display = on ? 'none' : '';
@@ -310,11 +295,9 @@ export function initHUD(){
   toggle2DUI(is2D);
   if (is2D) { show2D(); } else { hide2D(); }
 
-  // ===== Dropdown FVS — usa SOMENTE fvsList (ordem preservada)
   const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
-  populateFVSSelect(fvsSelect, fvsIndex, /*showNCOnly=*/State.NC_MODE);
+  populateFVSSelect(fvsSelect, fvsIndex, State.NC_MODE, window.DOGE?.__isoPavPrefix ?? null);
 
-  // seleção inicial (QS > prefs > primeira da lista oficial)
   let initialKey = '';
   const prefKey  = prefs?.fvs ? normFVSKey(prefs.fvs) : '';
   const qsKey    = qsFvs ? normFVSKey(qsFvs) : '';
@@ -330,14 +313,13 @@ export function initHUD(){
     applyFVSSelection(initialKey, fvsIndex);
   }
 
-  // ---- Pavimento (modo solo)
   const maxLvl = getMaxLevel();
   if (floorLimitRange){
     floorLimitRange.min  = '0';
     floorLimitRange.max  = String(maxLvl);
     floorLimitRange.step = '1';
 
-    showAllFloors(); // começa sem corte
+    showAllFloors();
     if (!floorLimitRange.value) floorLimitRange.value = '0';
     if (floorLimitValue) floorLimitValue.textContent = '—';
 
@@ -349,50 +331,42 @@ export function initHUD(){
     });
   }
 
-  // Listeners padrão (NC, FVS, sliders etc)
   wireEvents(fvsIndex);
 
-  // ===============================
-  // <<< ADD: Listener do long-press vindo do viewer
-  // ===============================
-  (window.DOGE ||= {}).__isoFloor ??= null; // guarda nível isolado atual (toggle)
+  (window.DOGE ||= {}).__isoFloor ??= null;
+  window.DOGE.__isoPavPrefix ??= null; // Novo: armazena prefixo textual do pavimento isolado
 
-window.addEventListener('doge:isolate-floor', (ev) => {
-  const d = ev?.detail || {};
-  let lv = Number(d.levelIdx);
-  if (!Number.isFinite(lv)) return;
+  window.addEventListener('doge:isolate-floor', (ev) => {
+    const d = ev?.detail || {};
+    let lv = Number(d.levelIdx);
+    if (!Number.isFinite(lv)) return;
 
-  const max = Number(getMaxLevel?.() ?? 0) || 0;
-  const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
+    const max = Number(getMaxLevel?.() ?? 0) || 0;
+    const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
 
-  // Toggle: se já está isolado nesse mesmo nível → desfaz (mostrar todos)
-  if (window.DOGE.__isoFloor === lv) {
-    window.DOGE.__isoFloor = null;
-    if (typeof applyFloorLimit === 'function') applyFloorLimit(max);
-    if (typeof showAllFloors === 'function') showAllFloors();
-    if (floorLimitRange) floorLimitRange.value = String(max);
-    if (floorLimitValue) floorLimitValue.textContent = '—all—';
-    // Novo: repopular dropdown com todas as FVS
-    populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE);
+    if (window.DOGE.__isoFloor === lv) {
+      window.DOGE.__isoFloor = null;
+      window.DOGE.__isoPavPrefix = null; // Limpa prefixo
+      if (typeof applyFloorLimit === 'function') applyFloorLimit(max);
+      if (typeof showAllFloors === 'function') showAllFloors();
+      if (floorLimitRange) floorLimitRange.value = String(max);
+      if (floorLimitValue) floorLimitValue.textContent = '—all—';
+      populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, null);
+      render();
+      return;
+    }
+
+    window.DOGE.__isoFloor = lv;
+    window.DOGE.__isoPavPrefix = getPavimentoPrefixForLevel(lv); // Calcula prefixo
+    if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
+    if (floorLimitRange) floorLimitRange.value = String(lv);
+    if (floorLimitValue) floorLimitValue.textContent = String(lv);
+    populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, window.DOGE.__isoPavPrefix);
     render();
-    return;
-  }
+  }, { passive: true });
 
-  // Isolar novo nível
-  window.DOGE.__isoFloor = lv;
-  if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
-  if (floorLimitRange) floorLimitRange.value = String(lv);
-  if (floorLimitValue) floorLimitValue.textContent = String(lv);
-  // Novo: filtrar dropdown por levelIdx
-  populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, lv);
-  render();
-}, { passive: true });
-  // ===============================
-
-  // Observer para mudanças no HUD (recalcula cards 2D)
   setupHudResizeObserver();
 
-  // === Handle (grabber) expandir/recolher HUD (2 estados) ===
   const hudHandle = document.getElementById('hudHandle');
   if (hudHandle && hudEl) {
     hudHandle.setAttribute('role', 'button');
@@ -453,161 +427,150 @@ window.addEventListener('doge:isolate-floor', (ev) => {
     syncExpanded();
   }
 
-  // ===== Configurações (dot) — selecionar obra =====
   const btnSettings = document.getElementById('btnHudSettings');
   if (btnSettings) {
     btnSettings.addEventListener('pointerdown', (e)=>{ e.preventDefault(); e.stopPropagation(); }, { passive:false });
     btnSettings.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); openSettingsModal(); }, { passive:false });
   }
 
-async function openSettingsModal(){
-  const backdrop = document.getElementById('doge-modal-backdrop');
-  const modal    = document.getElementById('doge-modal');
-  const titleEl  = document.getElementById('doge-modal-title');
-  const content  = document.getElementById('doge-modal-content');
-  const closeBtn = document.getElementById('doge-modal-close');
-  const pill     = document.getElementById('doge-modal-pill');
+  async function openSettingsModal(){
+    const backdrop = document.getElementById('doge-modal-backdrop');
+    const modal    = document.getElementById('doge-modal');
+    const titleEl  = document.getElementById('doge-modal-title');
+    const content  = document.getElementById('doge-modal-content');
+    const closeBtn = document.getElementById('doge-modal-close');
+    const pill     = document.getElementById('doge-modal-pill');
 
-  if (!backdrop || !modal || !titleEl || !content) return;
+    if (!backdrop || !modal || !titleEl || !content) return;
 
-  // === helpers (mesma ideia do modal.js) ===
-  const getCanvas = () => document.getElementById('doge-canvas') || document.querySelector('#app canvas');
-  const setInputLock = (on) => { (window.DOGE ||= {}).inputLocked = !!on; };
-  const releaseAllCanvasCaptures = () => {
-    const cvs = getCanvas();
-    const dbg = window.DOGE?.__inputDbg;
-    if (!cvs || !dbg) return;
-    if (dbg.captures && cvs.releasePointerCapture) {
-      for (const id of Array.from(dbg.captures)) { try { cvs.releasePointerCapture(id); } catch {} }
-      dbg.captures.clear?.();
+    const getCanvas = () => document.getElementById('doge-canvas') || document.querySelector('#app canvas');
+    const setInputLock = (on) => { (window.DOGE ||= {}).inputLocked = !!on; };
+    const releaseAllCanvasCaptures = () => {
+      const cvs = getCanvas();
+      const dbg = window.DOGE?.__inputDbg;
+      if (!cvs || !dbg) return;
+      if (dbg.captures && cvs.releasePointerCapture) {
+        for (const id of Array.from(dbg.captures)) { try { cvs.releasePointerCapture(id); } catch {} }
+        dbg.captures.clear?.();
+      }
+      try { dbg.pointers?.clear?.(); } catch {}
+    };
+
+    const closeSettingsModal = () => {
+      backdrop.classList.remove('show');
+      backdrop.setAttribute('aria-hidden','true');
+      document.body.classList.remove('modal-open');
+
+      const cvs = getCanvas();
+      if (cvs) {
+        cvs.style.pointerEvents = 'auto';
+        releaseAllCanvasCaptures();
+      }
+      setInputLock(false);
+
+      modal.removeAttribute('data-kind');
+      if (pill) pill.style.display = '';
+
+      backdrop.removeEventListener('click', onClickOutside, true);
+      content.removeEventListener('click', onCancelBtn);
+      closeBtn?.removeEventListener('click', closeSettingsModal);
+      document.removeEventListener('keydown', onEsc);
+    };
+
+    const onEsc = (e) => {
+      if (e.key === 'Escape' && backdrop.classList.contains('show')) {
+        e.preventDefault();
+        closeSettingsModal();
+      }
+    };
+    const onClickOutside = (e) => { if (e.target === backdrop) closeSettingsModal(); };
+    const onCancelBtn = (e) => {
+      const el = e.target.closest?.('#obraCancel,[data-modal-cancel],.js-modal-cancel,[data-dismiss="modal"]');
+      if (el) { e.preventDefault(); closeSettingsModal(); }
+    };
+
+    modal.setAttribute('data-kind', 'obra');
+    applyModalTint?.('#6e7681');
+
+    titleEl.textContent = 'Configurações';
+    if (pill) { pill.textContent = 'Obra'; pill.style.display = 'inline-block'; }
+
+    let obras = [];
+    let errorMsg = '';
+    try{
+      const resp = await fetch('./data/obras.json', { cache:'no-store' });
+      if (!resp.ok){
+        errorMsg = `Não encontrei ./data/obras.json (status ${resp.status}).`;
+      } else {
+        const json = await resp.json();
+        if (Array.isArray(json)) {
+          obras = json.filter(o => o && typeof o.id === 'string');
+          if (obras.length === 0) errorMsg = 'obras.json está vazio ou sem objetos { id, label }.';
+        } else {
+          errorMsg = 'obras.json não é um array JSON.';
+        }
+      }
+    }catch(e){
+      errorMsg = 'Falha ao requisitar obras.json.';
+      console.error('[obras.json] fetch/parse:', e);
     }
-    try { dbg.pointers?.clear?.(); } catch {}
-  };
 
-  const closeSettingsModal = () => {
-    // fecha visualmente
-    backdrop.classList.remove('show');
-    backdrop.setAttribute('aria-hidden','true');
-    document.body.classList.remove('modal-open');
+    const qs = new URL(location.href).searchParams;
+    const obraAtual = qs.get('obra') || '';
+    if ((!Array.isArray(obras) || obras.length === 0) && obraAtual) {
+      obras = [{ id: obraAtual, label: obraAtual }];
+    }
 
-    // reabilita canvas/input
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = `
+      <div class="form-grid">
+        <label>
+          <span>Obra</span>
+          <select id="obraSelect">
+            ${obras.map(o => `<option value="${o.id}" ${o.id===obraAtual?'selected':''}>${o.label ?? o.id}</option>`).join('')}
+          </select>
+        </label>
+        ${errorMsg ? `<p class="error-msg">${errorMsg}</p>` : ''}
+        <div class="actions">
+          <button id="obraCancel" type="button" class="btn-cancel">Cancelar</button>
+          <button id="obraApply" type="button" class="btn-apply">Aplicar</button>
+        </div>
+      </div>
+    `;
+    content.replaceChildren(wrapper);
+
+    const obraSelect = wrapper.querySelector('#obraSelect');
+
+    wrapper.querySelector('#obraApply')?.addEventListener('click', ()=>{
+      const chosen = obraSelect?.value || '';
+      if (!chosen) return;
+      localStorage.setItem('obraId', chosen);
+      const url = new URL(location.href);
+      url.searchParams.set('obra', chosen);
+      location.href = url.toString();
+    }, { passive:true });
+
     const cvs = getCanvas();
     if (cvs) {
-      cvs.style.pointerEvents = 'auto';
+      cvs.style.pointerEvents = 'none';
       releaseAllCanvasCaptures();
     }
-    setInputLock(false);
+    (window.DOGE ||= {}).__inputDbg ||= {};
+    setInputLock(true);
 
-    // remove marcação de "obra" (evita herdar cinza no próximo modal de detalhes)
-    modal.removeAttribute('data-kind');
+    backdrop.classList.add('show');
+    backdrop.setAttribute('aria-hidden','false');
+    document.body.classList.add('modal-open');
 
-    // limpa listeners
-    backdrop.removeEventListener('click', onClickOutside, true);
-    content.removeEventListener('click', onCancelBtn);
-    closeBtn?.removeEventListener('click', closeSettingsModal);
-    document.removeEventListener('keydown', onEsc);
-
-    if (pill) pill.style.display = '';
-  };
-
-  const onEsc = (e) => {
-    if (e.key === 'Escape' && backdrop.classList.contains('show')) {
-      e.preventDefault();
-      closeSettingsModal();
-    }
-  };
-  const onClickOutside = (e) => { if (e.target === backdrop) closeSettingsModal(); };
-  const onCancelBtn = (e) => {
-    const el = e.target.closest?.('#obraCancel,[data-modal-cancel],.js-modal-cancel,[data-dismiss="modal"]');
-    if (el) { e.preventDefault(); closeSettingsModal(); }
-  };
-
-  // ====== Monta conteúdo ======
-  // Marca explicitamente este modal como "obra" e força o tint cinza
-  modal.setAttribute('data-kind', 'obra');
-  applyModalTint?.('#6e7681');
-
-  titleEl.textContent = 'Configurações';
-  if (pill) { pill.textContent = 'Obra'; pill.style.display = 'inline-block'; }
-
-  let obras = [];
-  let errorMsg = '';
-  try{
-    const resp = await fetch('./data/obras.json', { cache:'no-store' });
-    if (!resp.ok){
-      errorMsg = `Não encontrei ./data/obras.json (status ${resp.status}).`;
-    } else {
-      const json = await resp.json();
-      if (Array.isArray(json)) {
-        obras = json.filter(o => o && typeof o.id === 'string');
-        if (obras.length === 0) errorMsg = 'obras.json está vazio ou sem objetos { id, label }.';
-      } else {
-        errorMsg = 'obras.json não é um array JSON.';
-      }
-    }
-  }catch(e){
-    errorMsg = 'Falha ao requisitar obras.json.';
-    console.error('[obras.json] fetch/parse:', e);
+    content.addEventListener('click', onCancelBtn);
+    closeBtn?.addEventListener('click', closeSettingsModal, { passive:true });
+    backdrop.addEventListener('click', onClickOutside, true);
+    document.addEventListener('keydown', onEsc);
   }
 
-  const qs = new URL(location.href).searchParams;
-  const obraAtual = qs.get('obra') || '';
-  if ((!Array.isArray(obras) || obras.length === 0) && obraAtual) {
-    obras = [{ id: obraAtual, label: obraAtual }];
-  }
-
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = `
-    <div class="form-grid">
-      <label>
-        <span>Obra</span>
-        <select id="obraSelect">
-          ${obras.map(o => `<option value="${o.id}" ${o.id===obraAtual?'selected':''}>${o.label ?? o.id}</option>`).join('')}
-        </select>
-      </label>
-      ${errorMsg ? `<p class="error-msg">${errorMsg}</p>` : ''}
-      <div class="actions">
-        <button id="obraCancel" type="button" class="btn-cancel">Cancelar</button>
-        <button id="obraApply" type="button" class="btn-apply">Aplicar</button>
-      </div>
-    </div>
-  `;
-  content.replaceChildren(wrapper);
-
-  const obraSelect = wrapper.querySelector('#obraSelect');
-
-  wrapper.querySelector('#obraApply')?.addEventListener('click', ()=>{
-    const chosen = obraSelect?.value || '';
-    if (!chosen) return;
-    localStorage.setItem('obraId', chosen);
-    const url = new URL(location.href);
-    url.searchParams.set('obra', chosen);
-    location.href = url.toString();
-  }, { passive:true });
-
-  // ====== ABRIR modal ======
-  const cvs = getCanvas();
-  if (cvs) {
-    cvs.style.pointerEvents = 'none';
-    releaseAllCanvasCaptures();
-  }
-  (window.DOGE ||= {}).__inputDbg ||= {};
-  setInputLock(true);
-
-  backdrop.classList.add('show');
-  backdrop.setAttribute('aria-hidden','false');
-  document.body.classList.add('modal-open');
-
-  content.addEventListener('click', onCancelBtn);
-  closeBtn?.addEventListener('click', closeSettingsModal, { passive:true });
-  backdrop.addEventListener('click', onClickOutside, true);
-  document.addEventListener('keydown', onEsc);
-}
-
-  // ===== Sync UI 2D após clique no botão 2D
   const sync2DUI = () => {
     const on = (btn2D?.getAttribute('aria-pressed') === 'true')
-            ||  btn2D?.classList.contains('active')
+            || btn2D?.classList.contains('active')
             || (State.flatten2D >= 0.95);
     toggle2DUI(on);
     if (on) show2D(); else hide2D();
@@ -622,7 +585,6 @@ async function openSettingsModal(){
 // Eventos do HUD
 // ============================
 function wireEvents(fvsIndex){
-  // FVS change
   fvsSelect?.addEventListener('change', ()=>{
     const key = normFVSKey(fvsSelect.value);
     setQS({ fvs: key || null });
@@ -635,53 +597,47 @@ function wireEvents(fvsIndex){
     render();
   });
 
-  // Corte por pavimento (granular, step=1)
   floorLimitRange?.addEventListener('input', ()=>{
     const lv = Number(floorLimitRange.value) || 0;
     showOnlyFloor(lv);
+    if (floorLimitValue) floorLimitValue.textContent = `${lv}`;
     render();
   });
 
-  // NC toggle
-btnNC?.addEventListener('click', () => {
-  with2DScrollPreserved(() => {
-    State.NC_MODE = !State.NC_MODE;
-    const on = !!State.NC_MODE;
-    btnNC.setAttribute('aria-pressed', String(on));
-    btnNC.classList.toggle('active', on);
-    setQS({ nc: on ? '1' : null });
-    const prefs = loadPrefs() || {};
-    prefs.nc = on;
-    savePrefs(prefs);
+  btnNC?.addEventListener('click', () => {
+    with2DScrollPreserved(() => {
+      State.NC_MODE = !State.NC_MODE;
+      const on = !!State.NC_MODE;
+      btnNC.setAttribute('aria-pressed', String(on));
+      btnNC.classList.toggle('active', on);
+      setQS({ nc: on ? '1' : null });
+      const prefs = loadPrefs() || {};
+      prefs.nc = on;
+      savePrefs(prefs);
 
-    // Obtém o levelIdx atual, se houver um pavimento isolado
-    const levelIdx = window.DOGE?.__isoFloor ?? null;
+      const pavimentoFilter = window.DOGE?.__isoPavPrefix ?? null;
+      populateFVSSelect(fvsSelect, fvsIndex, on, pavimentoFilter);
 
-    // Repopula o dropdown, respeitando o filtro por pavimento (se aplicável) e o modo NC
-    populateFVSSelect(fvsSelect, fvsIndex, on, Number.isFinite(levelIdx) ? levelIdx : null);
-
-    // Atualiza a seleção de FVS, se necessário
-    if (State.CURRENT_FVS_KEY && fvsIndex.has(State.CURRENT_FVS_KEY)) {
-      if (![...fvsSelect.options].some(o => o.value === State.CURRENT_FVS_KEY)) {
-        const ord = fvsIndex.__order || Array.from(fvsIndex.keys());
-        State.CURRENT_FVS_KEY = ord[0] || '';
-      }
-      if (State.CURRENT_FVS_KEY) {
+      if (State.CURRENT_FVS_KEY && fvsIndex.has(State.CURRENT_FVS_KEY)) {
+        if (![...fvsSelect.options].some(o => o.value === State.CURRENT_FVS_KEY)) {
+          const ord = fvsIndex.__order || Array.from(fvsIndex.keys());
+          State.CURRENT_FVS_KEY = ord[0] || '';
+        }
+        if (State.CURRENT_FVS_KEY) {
+          fvsSelect.value = State.CURRENT_FVS_KEY;
+          applyFVSSelection(State.CURRENT_FVS_KEY, fvsIndex);
+        }
+      } else if (fvsSelect.options.length) {
+        State.CURRENT_FVS_KEY = fvsSelect.options[0].value;
         fvsSelect.value = State.CURRENT_FVS_KEY;
         applyFVSSelection(State.CURRENT_FVS_KEY, fvsIndex);
       }
-    } else if (fvsSelect.options.length) {
-      State.CURRENT_FVS_KEY = fvsSelect.options[0].value;
-      fvsSelect.value = State.CURRENT_FVS_KEY;
-      applyFVSSelection(State.CURRENT_FVS_KEY, fvsIndex);
-    }
 
-    render2DCards();
-    render();
+      render2DCards();
+      render();
+    });
   });
-});
 
-  // Opacidade
   opacityRange?.addEventListener('input', ()=>{
     const v = Math.max(0, Math.min(100, Number(opacityRange.value)||0)) / 100;
     State.faceOpacity = v;
@@ -689,70 +645,57 @@ btnNC?.addEventListener('click', () => {
     render();
   });
 
-  // Explode XY
   explodeXYRange?.addEventListener('input', ()=>{
     State.explodeXY = Number(explodeXYRange.value) || 0;
     applyExplode();
     render();
   });
 
-  // Explode Y
   explodeYRange?.addEventListener('input', ()=>{
     State.explodeY = Number(explodeYRange.value) || 0;
     applyExplode();
     render();
   });
-  
-// Reset geral (volta tudo ao padrão)
-btnResetAll?.addEventListener('click', ()=>{
-  // 1) Explode / Opacidade
-  State.explodeXY = 0;
-  State.explodeY  = 0;
-  if (explodeXYRange) explodeXYRange.value = '0';
-  if (explodeYRange)  explodeYRange.value  = '0';
 
-  State.faceOpacity = 1;
-  if (opacityRange) opacityRange.value = '100';
-  setFaceOpacity(1, true);
+  btnResetAll?.addEventListener('click', ()=>{
+    State.explodeXY = 0;
+    State.explodeY  = 0;
+    if (explodeXYRange) explodeXYRange.value = '0';
+    if (explodeYRange)  explodeYRange.value = '0';
 
-  // 2) Pavimentos → TODOS
-  const maxLvl2 = getMaxLevelIndex(); // ou getMaxLevel(), se preferir
-  State.floorLimit = maxLvl2;
+    State.faceOpacity = 1;
+    if (opacityRange) opacityRange.value = '100';
+    setFaceOpacity(1, true);
 
-  // <<< IMPORTANTE: limpar isolamento global >>>
-  (window.DOGE ||= {}).__isoFloor = null;
+    const maxLvl2 = getMaxLevelIndex();
+    State.floorLimit = maxLvl2;
 
-  // Mostrar todos os pavimentos e sincronizar HUD
-  if (typeof applyFloorLimit === 'function') applyFloorLimit(maxLvl2);
-  if (typeof showAllFloors   === 'function') showAllFloors();
+    (window.DOGE ||= {}).__isoFloor = null;
+    window.DOGE.__isoPavPrefix = null; // Novo: limpa prefixo
 
-  if (floorLimitRange) floorLimitRange.value = String(maxLvl2);
-  if (floorLimitValue) floorLimitValue.textContent = '—all—';
+    if (typeof applyFloorLimit === 'function') applyFloorLimit(maxLvl2);
+    if (typeof showAllFloors === 'function') showAllFloors();
 
-  // 3) 2D desligado
-  State.flatten2D = 0;
-  btn2D?.setAttribute('aria-pressed','false');
-  btn2D?.classList.remove('active');
-  hide2D();
-  if (btnZoom2D){
-    btnZoom2D.style.display = 'none';
-    btnZoom2D.textContent = '🔍' + getNextGridZoomSymbolFrom(1);
-  }
-  if (rowSliders) rowSliders.style.display = '';
+    if (floorLimitRange) floorLimitRange.value = String(maxLvl2);
+    if (floorLimitValue) floorLimitValue.textContent = '—all—';
 
-  // 4) Explode novamente (para aplicar zeros)
-  applyExplode();
+    State.flatten2D = 0;
+    btn2D?.setAttribute('aria-pressed','false');
+    btn2D?.classList.remove('active');
+    hide2D();
+    if (btnZoom2D){
+      btnZoom2D.style.display = 'none';
+      btnZoom2D.textContent = '🔍' + getNextGridZoomSymbolFrom(1);
+    }
+    if (rowSliders) rowSliders.style.display = '';
 
-  // 5) Recentrar (sem animar)
-  recenterCamera({ theta: INITIAL_THETA, phi: INITIAL_PHI, animate: false, margin: 1.18 });
+    applyExplode();
+    recenterCamera({ theta: INITIAL_THETA, phi: INITIAL_PHI, animate: false, margin: 1.18 });
+    recolorMeshes3D();
+    render2DCards();
+    render();
+  });
 
-  // 6) Recolorir e redesenhar
-  recolorMeshes3D();
-  render2DCards();
-  render();
-});
-
-  // Toggle 2D
   btn2D?.addEventListener('click', ()=>{
     const turningOn = !(State.flatten2D >= 0.95);
 
@@ -790,7 +733,6 @@ btnResetAll?.addEventListener('click', ()=>{
     render();
   });
 
-  // Botão de Zoom 2D
   btnZoom2D?.addEventListener('click', ()=>{
     const host = document.getElementById('cards2d');
     const focalY = host ? Math.floor(host.clientHeight / 2) : 0;
@@ -885,9 +827,6 @@ function with2DScrollPreserved(
   requestAnimationFrame(()=> requestAnimationFrame(restore));
 }
 
-// ============================
-// Observador de tamanho do HUD
-// ============================
 function setupHudResizeObserver(){
   if (!hudEl) return;
   if ('ResizeObserver' in window){
@@ -899,11 +838,3 @@ function setupHudResizeObserver(){
     ro.observe(hudEl);
   }
 }
-
-
-
-
-
-
-
-
