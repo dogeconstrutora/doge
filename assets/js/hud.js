@@ -352,7 +352,6 @@ export function initHUD(){
 
   (window.DOGE ||= {}).__isoFloor ??= null;
   window.DOGE.__isoPavPrefix ??= null;
-
 window.addEventListener('doge:isolate-floor', (ev) => {
   const d = ev?.detail || {};
   let lv = Number(d.levelIdx);
@@ -360,7 +359,7 @@ window.addEventListener('doge:isolate-floor', (ev) => {
 
   const max = Number(getMaxLevel?.() ?? 0) || 0;
   const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
-  const previousFVS = State.CURRENT_FVS_KEY; // Novo: armazena FVS anterior
+  const previousFVS = State.CURRENT_FVS_KEY; // Armazena FVS anterior
 
   // Toggle: se já está isolado nesse mesmo nível → desfaz (mostrar todos)
   if (window.DOGE.__isoFloor === lv) {
@@ -369,12 +368,18 @@ window.addEventListener('doge:isolate-floor', (ev) => {
     if (typeof showAllFloors === 'function') showAllFloors();
     if (floorLimitRange) floorLimitRange.value = String(max);
     if (floorLimitValue) floorLimitValue.textContent = '—all—';
-    // Novo: repopular dropdown com todas as FVS e restaurar FVS anterior
-    populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE);
+    // Repopular dropdown com todas as FVS e restaurar FVS anterior
+    populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE);
     if (previousFVS && fvsIndex.has(previousFVS)) {
       fvsSelect.value = previousFVS;
       State.CURRENT_FVS_KEY = previousFVS;
       applyFVSSelection(previousFVS, fvsIndex);
+    } else {
+      // Se não houver FVS anterior, selecionar a primeira disponível
+      const ord = fvsIndex.__order || Array.from(fvsIndex.keys());
+      State.CURRENT_FVS_KEY = ord[0] || '';
+      fvsSelect.value = State.CURRENT_FVS_KEY;
+      applyFVSSelection(State.CURRENT_FVS_KEY, fvsIndex);
     }
     render();
     return;
@@ -385,22 +390,29 @@ window.addEventListener('doge:isolate-floor', (ev) => {
   if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
   if (floorLimitRange) floorLimitRange.value = String(lv);
   if (floorLimitValue) floorLimitValue.textContent = `${lv}`;
-  // Novo: filtrar dropdown por levelIdx
-  populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, lv);
+  // Filtrar dropdown por levelIdx
+  populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, lv);
 
-  // Novo: verifica se a FVS anterior está disponível no pavimento isolado
-  if (previousFVS && [...fvsSelect.options].some(o => o.value === previousFVS)) {
+  // Verificar se há FVS disponíveis no pavimento
+  const availableOptions = [...fvsSelect.options].filter(o => o.value);
+  if (availableOptions.length === 0) {
+    // Se não houver FVS, mostrar placeholder
+    fvsSelect.innerHTML = '<option value="" disabled selected>Nenhuma FVS encontrada</option>';
+    State.CURRENT_FVS_KEY = '';
+  } else if (previousFVS && availableOptions.some(o => o.value === previousFVS)) {
+    // Se a FVS anterior está disponível, mantê-la selecionada
     fvsSelect.value = previousFVS;
     State.CURRENT_FVS_KEY = previousFVS;
     applyFVSSelection(previousFVS, fvsIndex);
   } else {
-    // Novo: se não, define placeholder e não aplica FVS
-    fvsSelect.innerHTML = '<option value="" disabled selected>Nenhuma FVS encontrada</option>';
-    State.CURRENT_FVS_KEY = '';
+    // Se a FVS anterior não está disponível, não selecionar nada
+    fvsSelect.value = '';
+    State.CURRENT_FVS_KEY = previousFVS || ''; // Mantém FVS anterior para restauração
   }
 
   render();
 }, { passive: true });
+
   setupHudResizeObserver();
 
   const hudHandle = document.getElementById('hudHandle');
@@ -917,3 +929,4 @@ function setupHudResizeObserver(){
   }
 
 }
+
