@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { State } from './state.js';
 import { scene, syncOrbitTargetToModel} from './scene.js';
 import { pickFVSColor } from './colors.js';
+import { splitHierarchy, joinHierarchy} from './utils.js';
 
 // Grupo raiz (exportado)
 export let torre = null;
@@ -35,6 +36,21 @@ export function getLevelIndexForName(fullName){
   if (!nm) return null;
   const v = _nameToLevelIndex.get(nm);
   return (v == null) ? null : Number(v);
+}
+
+/** Obtém o prefixo hierárquico do pavimento para um levelIndex (ex.: "Torre - Pavimento 25 - ") */
+export function getPavimentoPrefixForLevel(levelIndex) {
+  if (!torre) return null;
+  for (const g of torre.children) {
+    if (g.userData.levelIndex === levelIndex) {
+      const nome = g.userData.nome || '';
+      const parts = splitHierarchy(nome); // Usa splitHierarchy de utils.js (importe se necessário)
+      // Remove partes de apto/sala (assuma até "Pavimento X")
+      while (parts.length > 2 && !parts[1].includes('Pavimento')) parts.shift(); // Ajuste se "Torre" for fixo
+      return joinHierarchy(parts.slice(0, 2), 2) + ' - '; // "Torre - Pavimento X - "
+    }
+  }
+  return null;
 }
 
 /** Limpa o cache (chamar antes de reconstruir a torre) */
@@ -677,4 +693,5 @@ export function setGroupHighlight(group, mode = 'none', THREERef) {
     m.needsUpdate = true;
   }
 }
+
 
