@@ -82,17 +82,34 @@ export function applyFVSAndRefresh(){
   let key = State.CURRENT_FVS || '';
   if (!key && State.CURRENT_FVS_LABEL) key = normFVSKey(State.CURRENT_FVS_LABEL);
 
-  if (!key || !fvsIndex.has(key)){
-    const ord = fvsIndex.__order || Array.from(fvsIndex.keys());
-    key = ord[0] || '';
+  // Respeitar a FVS salva ou da URL, apenas usar a primeira do fvsIndex se não houver nenhuma
+  if (!key || !fvsIndex.has(key)) {
+    const qsFvs = getQS('fvs');
+    const prefs = loadPrefs();
+    const prefKey = prefs?.fvs ? normFVSKey(prefs.fvs) : '';
+    if (qsFvs && fvsIndex.has(qsFvs)) key = qsFvs;
+    else if (prefKey && fvsIndex.has(prefKey)) key = prefKey;
+    else {
+      const ord = fvsIndex.__order || Array.from(fvsIndex.keys());
+      key = ord[0] || '';
+    }
   }
 
   if (fvsSelect) {
     populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, window.DOGE?.__isoPavPrefix ?? null);
     if (key && fvsIndex.has(key)) fvsSelect.value = key;
+    else fvsSelect.value = '';
   }
 
-  if (key) applyFVSSelection(key, fvsIndex);
+  if (key && fvsIndex.has(key)) {
+    State.CURRENT_FVS = key;
+    applyFVSSelection(key, fvsIndex);
+  } else {
+    State.CURRENT_FVS = '';
+  }
+
+  // Atualizar a URL com a FVS selecionada
+  setQS({ fvs: key || null });
 
   render2DCards();
   render();
@@ -258,11 +275,13 @@ export function initHUD(){
       const url = new URL(location.href);
       url.searchParams.set('obra', obraCache);
       if (fvsCache) url.searchParams.set('fvs', fvsCache); // Adiciona FVS salva na URL
+      console.log('[initHUD] Redirecionando para:', url.toString());
       location.replace(url.toString());
       return;
     }
     if (!obraQS && !obraCache) {
       setTimeout(() => openSettingsModal?.(), 0);
+      return;
     }
   }
 
@@ -273,8 +292,8 @@ export function initHUD(){
   State.NC_MODE = (qsNc != null) ? (qsNc === '1' || qsNc === 'true') : !!prefs.nc;
   State.IN_PROGRESS_MODE = (qsInProgress != null) ? (qsInProgress === '1' || qsInProgress === 'true') : !!prefs.inProgress;
 
-  // Carrega a FVS salva
-  State.CURRENT_FVS = prefs.fvs || State.CURRENT_FVS || '';
+  // Carrega a FVS salva ou da URL
+  State.CURRENT_FVS = qsFvs || prefs.fvs || '';
 
   btnNC?.setAttribute('aria-pressed', String(!!State.NC_MODE));
   btnNC?.classList.toggle('active', !!State.NC_MODE);
@@ -314,7 +333,7 @@ export function initHUD(){
   const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
   populateFVSSelect(fvsSelect, fvsIndex, State.NC_MODE, State.IN_PROGRESS_MODE, window.DOGE?.__isoPavPrefix ?? null);
 
-  // Aplica a FVS salva ou seleciona a primeira válida
+  // Aplica a FVS salva ou da URL
   let initialKey = '';
   const prefKey = prefs?.fvs ? normFVSKey(prefs.fvs) : '';
   const qsKey = qsFvs ? normFVSKey(qsFvs) : '';
@@ -328,12 +347,14 @@ export function initHUD(){
   if (initialKey) {
     fvsSelect.value = initialKey;
     State.CURRENT_FVS = initialKey;
-    window.DOGE.__lastManualFVS = initialKey; // Inicializa com a FVS salva
+    window.DOGE.__lastManualFVS = initialKey;
     applyFVSSelection(initialKey, fvsIndex);
+    setQS({ fvs: initialKey }); // Garantir que a URL reflita a FVS inicial
   } else {
     fvsSelect.value = '';
     State.CURRENT_FVS = '';
     window.DOGE.__lastManualFVS = '';
+    setQS({ fvs: null });
   }
 
   const maxLvl = getMaxLevel();
@@ -411,19 +432,29 @@ export function initHUD(){
         setQS({ fvs: targetFVS });
         console.log('[doge:isolate-floor] Restaurando e salvando FVS:', targetFVS);
       } else if (fvsSelect.options.length > 0) {
-        // Se não houver FVS anterior válida, não selecionar nada
-        fvsSelect.value = '';
-        State.CURRENT_FVS = '';
-        // Limpar prefs.fvs e URL
-        const prefs = loadPrefs() || {};
-        prefs.fvs = '';
-        savePrefs(prefs);
-        setQS({ fvs: null });
-        console.log('[doge:isolate-floor] Nenhuma FVS anterior válida, dropdown vazio');
+        // Se não houver FVS anterior válida, selecionar a primeira disponível
+        const firstValid = [...fvsSelect.options].find(o => !o.disabled);
+        if (firstValid) {
+          fvsSelect.value = firstValid.value;
+          State.CURRENT_FVS = firstValid.value;
+          applyFVSSelection(firstValid.value, fvsIndex);
+          const prefs = loadPrefs() || {};
+          prefs.fvs = firstValid.value;
+          savePrefs(prefs);
+          setQS({ fvs: firstValid.value });
+          console.log('[doge:isolate-floor] Nenhuma FVS anterior válida, selecionando:', firstValid.value);
+        } else {
+          fvsSelect.value = '';
+          State.CURRENT_FVS = '';
+          const prefs = loadPrefs() || {};
+          prefs.fvs = '';
+          savePrefs(prefs);
+          setQS({ fvs: null });
+          console.log('[doge:isolate-floor] Nenhuma FVS disponível, dropdown vazio');
+        }
       } else {
         fvsSelect.innerHTML = '<option value="" disabled selected>Nenhuma FVS encontrada</option>';
         State.CURRENT_FVS = '';
-        // Limpar prefs.fvs e URL
         const prefs = loadPrefs() || {};
         prefs.fvs = '';
         savePrefs(prefs);
@@ -451,6 +482,10 @@ export function initHUD(){
     if (availableOptions.length === 0) {
       fvsSelect.innerHTML = '<option value="" disabled selected>Nenhum serviço neste pavimento</option>';
       State.CURRENT_FVS = previousFVS || ''; // Preserva FVS anterior
+      const prefs = loadPrefs() || {};
+      prefs.fvs = previousFVS || '';
+      savePrefs(prefs);
+      setQS({ fvs: previousFVS || null });
       console.log('[doge:isolate-floor] Nenhuma FVS disponível no pavimento:', lv, 'preservando previousFVS=', previousFVS);
     } else if (previousFVS && availableOptions.some(o => o.value === previousFVS)) {
       // Se a FVS anterior está disponível, mantê-la selecionada
@@ -464,10 +499,26 @@ export function initHUD(){
       setQS({ fvs: previousFVS });
       console.log('[doge:isolate-floor] Mantendo e salvando FVS anterior:', previousFVS);
     } else {
-      // Se a FVS anterior não está disponível, deixar dropdown sem seleção
-      fvsSelect.value = '';
-      State.CURRENT_FVS = previousFVS || ''; // Preserva FVS anterior
-      console.log('[doge:isolate-floor] FVS anterior não disponível, dropdown vazio, preservando:', previousFVS);
+      // Se a FVS anterior não está disponível, selecionar a primeira disponível
+      const firstValid = availableOptions[0];
+      if (firstValid) {
+        fvsSelect.value = firstValid.value;
+        State.CURRENT_FVS = firstValid.value;
+        applyFVSSelection(firstValid.value, fvsIndex);
+        const prefs = loadPrefs() || {};
+        prefs.fvs = firstValid.value;
+        savePrefs(prefs);
+        setQS({ fvs: firstValid.value });
+        console.log('[doge:isolate-floor] FVS anterior não disponível, selecionando:', firstValid.value);
+      } else {
+        fvsSelect.value = '';
+        State.CURRENT_FVS = previousFVS || '';
+        const prefs = loadPrefs() || {};
+        prefs.fvs = previousFVS || '';
+        savePrefs(prefs);
+        setQS({ fvs: previousFVS || null });
+        console.log('[doge:isolate-floor] Nenhuma FVS válida, dropdown vazio, preservando:', previousFVS);
+      }
     }
 
     render2DCards();
@@ -682,7 +733,7 @@ function with2DScrollPreserved(
 
   for (const el of cards){
     const cy = Number.parseFloat(el.style.top)  || el.offsetTop  || 0;
-    const cx = Number.parseFloat(el.style.left) || el.offsetLeft || 0;
+    const cx = Number.parseFloat(el.style.left) || el.offsetTop || 0;
     const dy = Math.abs(cy - yAbs);
     const dx = Math.abs(cx - xAbs);
 
