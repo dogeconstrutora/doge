@@ -79,7 +79,7 @@ function buildFVSIndexFromLists(fvsStrings, apts) {
 export function applyFVSAndRefresh(){
   const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
 
-  let key = State.CURRENT_FVS_KEY || '';
+  let key = State.CURRENT_FVS || '';
   if (!key && State.CURRENT_FVS_LABEL) key = normFVSKey(State.CURRENT_FVS_LABEL);
 
   if (!key || !fvsIndex.has(key)){
@@ -126,7 +126,7 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, showInProgres
       return acc + (ncVal > 0 ? 1 : 0);
     }, 0);
 
-    const inProgress = filteredRows.reduce((acc, r) => {
+  const inProgress = filteredRows.reduce((acc, r) => {
       const ncVal = Number(r.qtd_nao_conformidades_ultima_inspecao ?? r.nao_conformidades ?? 0) || 0;
       const pendVal = Number(r.qtd_pend_ultima_inspecao ?? r.pendencias ?? 0) || 0;
       return acc + ((ncVal > 0 || pendVal > 0 || !r.data_termino_inicial) ? 1 : 0);
@@ -195,7 +195,7 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, showInProgres
     if (firstValid) {
       selectEl.value = firstValid.value;
     } else {
-      State.CURRENT_FVS_KEY = '';
+      State.CURRENT_FVS = '';
     }
   }
 }
@@ -204,7 +204,7 @@ function applyFVSSelection(fvsKey, fvsIndex){
   const bucket = fvsIndex.get(fvsKey);
   const rows   = bucket?.rows || [];
 
-  State.CURRENT_FVS_KEY   = fvsKey;
+  State.CURRENT_FVS = fvsKey;
   State.CURRENT_FVS_LABEL = bucket?.label || '';
 
   setRowsResolver2D(() => rows);
@@ -255,44 +255,46 @@ export function initHUD(){
 
   // Tela inicial: garantir obra escolhida
   {
-    const qs        = new URL(location.href).searchParams;
-    const obraQS    = qs.get('obra') || '';
+    const qs = new URL(location.href).searchParams;
+    const obraQS = qs.get('obra') || '';
     const obraCache = localStorage.getItem('obraId') || '';
 
-    if (!obraQS && obraCache){
+    if (!obraQS && obraCache) {
       const url = new URL(location.href);
       url.searchParams.set('obra', obraCache);
       location.replace(url.toString());
       return;
     }
-    if (!obraQS && !obraCache){
-      setTimeout(()=> openSettingsModal?.(), 0);
+    if (!obraQS && !obraCache) {
+      setTimeout(() => openSettingsModal?.(), 0);
     }
   }
 
   const prefs = loadPrefs();
   const qsFvs = getQS('fvs');
-  const qsNc  = getQS('nc');
+  const qsNc = getQS('nc');
   const qsInProgress = getQS('inProgress');
   State.NC_MODE = (qsNc != null) ? (qsNc === '1' || qsNc === 'true') : !!prefs.nc;
   State.IN_PROGRESS_MODE = (qsInProgress != null) ? (qsInProgress === '1' || qsInProgress === 'true') : !!prefs.inProgress;
+
+  State.CURRENT_FVS = prefs.fvs || State.CURRENT_FVS || '';
 
   btnNC?.setAttribute('aria-pressed', String(!!State.NC_MODE));
   btnNC?.classList.toggle('active', !!State.NC_MODE);
   btnInProgress?.setAttribute('aria-pressed', String(!!State.IN_PROGRESS_MODE));
   btnInProgress?.classList.toggle('active', !!State.IN_PROGRESS_MODE);
 
-  [opacityRange, explodeXYRange, explodeYRange].forEach(inp=>{
+  [opacityRange, explodeXYRange, explodeYRange].forEach(inp => {
     if (!inp) return;
     inp.classList.add('slim');
     inp.style.maxWidth = '140px';
   });
 
   if (explodeXYRange) explodeXYRange.value = String(State.explodeXY ?? 0);
-  if (explodeYRange)  explodeYRange.value  = String(State.explodeY  ?? 0);
-  if (opacityRange)   opacityRange.value   = String(Math.round((State.faceOpacity ?? 1) * 100));
+  if (explodeYRange) explodeYRange.value = String(State.explodeY ?? 0);
+  if (opacityRange) opacityRange.value = String(Math.round((State.faceOpacity ?? 1) * 100));
 
-  const is2D = (State.flatten2D >= 0.95);
+  const is2D = State.flatten2D >= 0.95;
   btn2D?.setAttribute('aria-pressed', String(is2D));
   btn2D?.classList.toggle('active', is2D);
 
@@ -300,10 +302,10 @@ export function initHUD(){
 
   const toggle2DUI = (on) => {
     if (rowSliders) rowSliders.style.display = on ? 'none' : '';
-    [floorLabel, floorLimitRange, floorLimitValue].forEach(el=>{
+    [floorLabel, floorLimitRange, floorLimitValue].forEach(el => {
       if (el) el.style.display = on ? 'none' : '';
     });
-    if (btnZoom2D){
+    if (btnZoom2D) {
       btnZoom2D.textContent = '🔍' + getNextGridZoomSymbol();
       btnZoom2D.style.display = on ? 'inline-flex' : 'none';
     }
@@ -315,9 +317,10 @@ export function initHUD(){
   const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
   populateFVSSelect(fvsSelect, fvsIndex, State.NC_MODE, State.IN_PROGRESS_MODE, window.DOGE?.__isoPavPrefix ?? null);
 
+  // Aplica a FVS salva ou seleciona a primeira válida
   let initialKey = '';
-  const prefKey  = prefs?.fvs ? normFVSKey(prefs.fvs) : '';
-  const qsKey    = qsFvs ? normFVSKey(qsFvs) : '';
+  const prefKey = prefs?.fvs ? normFVSKey(prefs.fvs) : '';
+  const qsKey = qsFvs ? normFVSKey(qsFvs) : '';
   if (qsKey && fvsIndex.has(qsKey)) initialKey = qsKey;
   else if (prefKey && fvsIndex.has(prefKey)) initialKey = prefKey;
   else {
@@ -325,22 +328,28 @@ export function initHUD(){
     initialKey = ord[0] || '';
   }
 
-  if (initialKey){
+  if (initialKey) {
     fvsSelect.value = initialKey;
+    State.CURRENT_FVS = initialKey;
+    window.DOGE.__lastManualFVS = initialKey; // Inicializa com a FVS salva
     applyFVSSelection(initialKey, fvsIndex);
+  } else {
+    fvsSelect.value = '';
+    State.CURRENT_FVS = '';
+    window.DOGE.__lastManualFVS = '';
   }
 
   const maxLvl = getMaxLevel();
-  if (floorLimitRange){
-    floorLimitRange.min  = '0';
-    floorLimitRange.max  = String(maxLvl);
+  if (floorLimitRange) {
+    floorLimitRange.min = '0';
+    floorLimitRange.max = String(maxLvl);
     floorLimitRange.step = '1';
 
     showAllFloors();
     if (!floorLimitRange.value) floorLimitRange.value = '0';
     if (floorLimitValue) floorLimitValue.textContent = '—';
 
-    floorLimitRange.addEventListener('input', ()=>{
+    floorLimitRange.addEventListener('input', () => {
       const lv = Number(floorLimitRange.value) || 0;
       showOnlyFloor(lv);
       if (floorLimitValue) floorLimitValue.textContent = `${lv}`;
@@ -352,6 +361,7 @@ export function initHUD(){
 
   (window.DOGE ||= {}).__isoFloor ??= null;
   window.DOGE.__isoPavPrefix ??= null;
+  window.DOGE.__lastManualFVS ??= initialKey;
 
 window.addEventListener('doge:isolate-floor', (ev) => {
   const d = ev?.detail || {};
