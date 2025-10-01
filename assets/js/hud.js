@@ -17,7 +17,7 @@ import { normFVSKey, bestRowForName, isHierarchyMatch } from './utils.js';
 import { apartamentos, fvsList } from './data.js';
 
 // ---- elementos
-let hudEl, rowSliders, fvsSelect, btnNC, btnInProgress, opacityRange, explodeXYRange, explodeYRange, btn2D, btnZoom2D, btnResetAll, floorLimitRange, floorLimitValue, floorLimitGroup;
+let hudEl, rowSliders, fvsSelect, btnNC, btnInProgress, opacityRange, explodeXYRange, explodeYRange, btn2D, btnZoom2D, btnResetAll, floorLimitRange, floorLimitValue, floorLimitGroup, btnSettings;
 
 // ============================
 // Índice FVS -> rows / lookup por nome (ORDEM = fvsList)
@@ -26,7 +26,6 @@ function buildFVSIndexFromLists(fvsStrings, apts) {
   const buckets = new Map();
   const order = [];
 
-  // 1) Cria buckets respeitando a ordem do fvs-list_by_obra.json
   for (const label of (Array.isArray(fvsStrings) ? fvsStrings : [])) {
     const key = normFVSKey(label);
     if (!key) continue;
@@ -42,7 +41,6 @@ function buildFVSIndexFromLists(fvsStrings, apts) {
     }
   }
 
-  // 2) Distribui apartamentos em seus respectivos buckets
   for (const r of (apts || [])) {
     const key = normFVSKey(r.fvs ?? r.FVS ?? '');
     if (!key) continue;
@@ -177,7 +175,7 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, showInProgres
     if (added === 0) {
       const opt = document.createElement('option');
       opt.value = '';
-      opt.textContent = 'Nenhuma FVS encontrada';
+      opt.textContent = 'Nenhum serviço neste pavimento';
       opt.disabled = true;
       opt.selected = true;
       selectEl.appendChild(opt);
@@ -193,28 +191,21 @@ function applyFVSSelection(fvsKey, fvsIndex, isManualSelection = false) {
   const bucket = fvsIndex.get(fvsKey);
   const rows = bucket?.rows || [];
 
-  console.log(`[applyFVSSelection] fvsKey=${fvsKey}, isManualSelection=${isManualSelection}, rows.length=${rows.length}`);
-
   State.CURRENT_FVS = fvsKey;
   State.CURRENT_FVS_LABEL = bucket?.label || '';
 
-  // Salvar FVS no cache e na URL
   const prefs = loadPrefs() || {};
   if (fvsKey) {
     prefs.fvs = fvsKey;
     setQS({ fvs: fvsKey });
-    console.log(`[applyFVSSelection] Saved fvsKey=${fvsKey} to prefs and URL`);
     if (isManualSelection) {
       window.DOGE.__lastManualFVS = fvsKey;
-      console.log(`[applyFVSSelection] Updated __lastManualFVS=${fvsKey}`);
     }
   } else {
     prefs.fvs = '';
     setQS({ fvs: null });
-    console.log(`[applyFVSSelection] Cleared fvsKey from prefs and URL`);
     if (isManualSelection) {
       window.DOGE.__lastManualFVS = '';
-      console.log(`[applyFVSSelection] Cleared __lastManualFVS`);
     }
   }
   savePrefs(prefs);
@@ -241,6 +232,151 @@ function applyFVSSelection(fvsKey, fvsIndex, isManualSelection = false) {
 }
 
 // ============================
+// Função para abrir o modal de configurações
+// ============================
+async function openSettingsModal() {
+  const backdrop = document.getElementById('doge-modal-backdrop');
+  const modal = document.getElementById('doge-modal');
+  const titleEl = document.getElementById('doge-modal-title');
+  const content = document.getElementById('doge-modal-content');
+  const closeBtn = document.getElementById('doge-modal-close');
+  const pill = document.getElementById('doge-modal-pill');
+
+  if (!backdrop || !modal || !titleEl || !content) {
+    return;
+  }
+
+  const getCanvas = () => document.getElementById('doge-canvas') || document.querySelector('#app canvas');
+  const setInputLock = (on) => { (window.DOGE ||= {}).inputLocked = !!on; };
+  const releaseAllCanvasCaptures = () => {
+    const cvs = getCanvas();
+    const dbg = window.DOGE?.__inputDbg;
+    if (!cvs || !dbg) return;
+    if (dbg.captures && cvs.releasePointerCapture) {
+      for (const id of Array.from(dbg.captures)) { try { cvs.releasePointerCapture(id); } catch {} }
+      dbg.captures.clear?.();
+    }
+    try { dbg.pointers?.clear?.(); } catch {}
+  };
+
+  const closeSettingsModal = () => {
+    backdrop.classList.remove('show');
+    backdrop.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
+
+    const cvs = getCanvas();
+    if (cvs) {
+      cvs.style.pointerEvents = 'auto';
+      releaseAllCanvasCaptures();
+    }
+    setInputLock(false);
+
+    modal.removeAttribute('data-kind');
+    if (pill) pill.style.display = '';
+
+    backdrop.removeEventListener('click', onClickOutside, true);
+    content.removeEventListener('click', onCancelBtn);
+    closeBtn?.removeEventListener('click', closeSettingsModal);
+    document.removeEventListener('keydown', onEsc);
+
+    const qs = new URL(location.href).searchParams;
+    const obraQS = qs.get('obra') || '';
+    if (!obraQS) {
+      setTimeout(() => openSettingsModal(), 0);
+    }
+  };
+
+  const onEsc = (e) => {
+    if (e.key === 'Escape' && backdrop.classList.contains('show')) {
+      e.preventDefault();
+      closeSettingsModal();
+    }
+  };
+  const onClickOutside = (e) => { if (e.target === backdrop) closeSettingsModal(); };
+  const onCancelBtn = (e) => {
+    const el = e.target.closest?.('#obraCancel,[data-modal-cancel],.js-modal-cancel,[data-dismiss="modal"]');
+    if (el) { e.preventDefault(); closeSettingsModal(); }
+  };
+
+  modal.setAttribute('data-kind', 'obra');
+  applyModalTint?.('#6e7681');
+
+  titleEl.textContent = 'Configurações';
+  if (pill) { pill.textContent = 'Obra'; pill.style.display = 'inline-block'; }
+
+  let obras = [];
+  let errorMsg = '';
+  try {
+    const resp = await fetch('./data/obras.json', { cache: 'no-store' });
+    if (!resp.ok) {
+      errorMsg = `Não encontrei ./data/obras.json (status ${resp.status}).`;
+    } else {
+      const json = await resp.json();
+      if (Array.isArray(json)) {
+        obras = json.filter(o => o && typeof o.id === 'string');
+        if (obras.length === 0) errorMsg = 'obras.json está vazio ou sem objetos { id, label }.';
+      } else {
+        errorMsg = 'obras.json não é um array JSON.';
+      }
+    }
+  } catch (e) {
+    errorMsg = 'Falha ao requisitar obras.json.';
+  }
+
+  const qs = new URL(location.href).searchParams;
+  const obraAtual = qs.get('obra') || '';
+  if ((!Array.isArray(obras) || obras.length === 0) && obraAtual) {
+    obras = [{ id: obraAtual, label: obraAtual }];
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `
+    <div class="form-grid">
+      <label>
+        <span>Obra</span>
+        <select id="obraSelect">
+          ${obras.map(o => `<option value="${o.id}" ${o.id === obraAtual ? 'selected' : ''}>${o.label ?? o.id}</option>`).join('')}
+        </select>
+      </label>
+      ${errorMsg ? `<p class="error-msg">${errorMsg}</p>` : ''}
+      <div class="actions">
+        <button id="obraCancel" type="button" class="btn-cancel">Cancelar</button>
+        <button id="obraApply" type="button" class="btn-apply">Aplicar</button>
+      </div>
+    </div>
+  `;
+  content.replaceChildren(wrapper);
+
+  const obraSelect = wrapper.querySelector('#obraSelect');
+
+  wrapper.querySelector('#obraApply')?.addEventListener('click', () => {
+    const chosen = obraSelect?.value || '';
+    if (!chosen) return;
+    localStorage.setItem('obraId', chosen);
+    const url = new URL(location.href);
+    url.searchParams.set('obra', chosen);
+    location.href = url.toString();
+  }, { passive: true });
+
+  const cvs = getCanvas();
+  if (cvs) {
+    cvs.style.pointerEvents = 'none';
+    releaseAllCanvasCaptures();
+  }
+  (window.DOGE ||= {}).__inputDbg ||= {};
+  setInputLock(true);
+
+  backdrop.classList.add('show');
+  backdrop.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+
+  content.addEventListener('click', onCancelBtn);
+  closeBtn?.addEventListener('click', closeSettingsModal, { passive: true });
+  backdrop.addEventListener('click', onClickOutside, true);
+  document.addEventListener('keydown', onEsc);
+}
+
+// ============================
 // Inicialização pública
 // ============================
 export function initHUD() {
@@ -251,6 +387,7 @@ export function initHUD() {
   btn2D = document.getElementById('btn2D');
   btnZoom2D = document.getElementById('btnZoom2D');
   btnResetAll = document.getElementById('btnResetAll');
+  btnSettings = document.getElementById('btnHudSettings');
 
   rowSliders = document.getElementById('row-sliders');
   opacityRange = document.getElementById('opacity');
@@ -263,26 +400,25 @@ export function initHUD() {
     || floorLimitRange?.closest('.control')
     || floorLimitRange?.parentElement;
 
-  if (!hudEl) return;
+  if (!hudEl) {
+    return;
+  }
 
-  // Tela inicial: garantir obra e FVS escolhidas
-  {
-    const qs = new URL(location.href).searchParams;
-    const obraQS = qs.get('obra') || '';
-    const fvsQS = qs.get('fvs') || '';
-    const obraCache = localStorage.getItem('obraId') || '';
-    const fvsCache = localStorage.getItem('doge.viewer.fvs') || '';
+  const qs = new URL(location.href).searchParams;
+  const obraQS = qs.get('obra') || '';
+  const fvsQS = qs.get('fvs') || '';
+  const obraCache = localStorage.getItem('obraId') || '';
+  const fvsCache = localStorage.getItem('doge.viewer.fvs') || '';
 
-    if (!obraQS && obraCache) {
-      const url = new URL(location.href);
-      url.searchParams.set('obra', obraCache);
-      if (fvsCache) url.searchParams.set('fvs', fvsCache);
-      location.replace(url.toString());
-      return;
-    }
-    if (!obraQS && !obraCache) {
-      setTimeout(() => openSettingsModal?.(), 0);
-    }
+  if (!obraQS && obraCache) {
+    const url = new URL(location.href);
+    url.searchParams.set('obra', obraCache);
+    if (fvsCache) url.searchParams.set('fvs', fvsCache);
+    location.replace(url.toString());
+    return;
+  }
+  if (!obraQS && !obraCache) {
+    setTimeout(() => openSettingsModal(), 0);
   }
 
   const prefs = loadPrefs();
@@ -292,7 +428,6 @@ export function initHUD() {
   State.NC_MODE = (qsNc != null) ? (qsNc === '1' || qsNc === 'true') : !!prefs.nc;
   State.IN_PROGRESS_MODE = (qsInProgress != null) ? (qsInProgress === '1' || qsInProgress === 'true') : !!prefs.inProgress;
 
-  // Carrega a FVS salva
   State.CURRENT_FVS = prefs.fvs || State.CURRENT_FVS || '';
 
   btnNC?.setAttribute('aria-pressed', String(!!State.NC_MODE));
@@ -333,7 +468,6 @@ export function initHUD() {
   const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
   populateFVSSelect(fvsSelect, fvsIndex, State.NC_MODE, State.IN_PROGRESS_MODE, window.DOGE?.__isoPavPrefix ?? null);
 
-  // Aplica a FVS salva ou seleciona a primeira válida
   let initialKey = '';
   const prefKey = prefs?.fvs ? normFVSKey(prefs.fvs) : '';
   const qsKey = qsFvs ? normFVSKey(qsFvs) : '';
@@ -379,9 +513,29 @@ export function initHUD() {
   window.DOGE.__isoPavPrefix ??= null;
   window.DOGE.__lastManualFVS ??= initialKey;
 
-  // Configura eventos do modal
+  if (btnSettings) {
+    btnSettings.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
+    btnSettings.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openSettingsModal();
+    }, { passive: false });
+  }
+
+  const sync2DUI = () => {
+    const on = (btn2D?.getAttribute('aria-pressed') === 'true')
+      || btn2D?.classList.contains('active')
+      || (State.flatten2D >= 0.95);
+    toggle2DUI(on);
+    if (on) show2D(); else hide2D();
+  };
+  btn2D?.addEventListener('click', () => setTimeout(sync2DUI, 0), { passive: true });
+  btn2D?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { setTimeout(sync2DUI, 0); }
+  }, { passive: false });
+
   window.addEventListener('doge:open-settings', () => {
-    applyModalTint(true);
+    openSettingsModal();
   }, { passive: true });
 
   window.addEventListener('doge:close-settings', () => {
@@ -389,7 +543,7 @@ export function initHUD() {
     const qs = new URL(location.href).searchParams;
     const obraQS = qs.get('obra') || '';
     if (!obraQS) {
-      setTimeout(() => openSettingsModal?.(), 0);
+      setTimeout(() => openSettingsModal(), 0);
     }
   }, { passive: true });
 
@@ -397,18 +551,14 @@ export function initHUD() {
     const d = ev?.detail || {};
     let lv = Number(d.levelIdx);
     if (!Number.isFinite(lv)) {
-      console.log('[doge:isolate-floor] Invalid levelIdx:', d.levelIdx);
       return;
     }
 
     const max = Number(getMaxLevel?.() ?? 0) || 0;
     const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
     const previousFVS = State.CURRENT_FVS;
-    console.log('[doge:isolate-floor] Starting: levelIdx=', lv, 'previousFVS=', previousFVS, 'fvsIndex=', Array.from(fvsIndex.keys()));
 
-    // Toggle: se já está isolado nesse mesmo nível → desfaz (mostrar todos)
     if (window.DOGE.__isoFloor === lv) {
-      console.log('[doge:isolate-floor] Desfazer isolamento: levelIdx=', lv);
       window.DOGE.__isoFloor = null;
       window.DOGE.__isoPavPrefix = null;
       if (typeof applyFloorLimit === 'function') applyFloorLimit(max);
@@ -431,8 +581,6 @@ export function initHUD() {
       return;
     }
 
-    // Isolar novo nível
-    console.log('[doge:isolate-floor] Isolando pavimento: levelIdx=', lv);
     window.DOGE.__isoFloor = lv;
     window.DOGE.__isoPavPrefix = getPavimentoPrefixForLevel(lv);
     if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
@@ -441,31 +589,28 @@ export function initHUD() {
     populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, window.DOGE.__isoPavPrefix);
 
     const availableOptions = [...fvsSelect.options].filter(o => o.value && !o.disabled);
-    console.log('[doge:isolate-floor] Após populate: availableOptions=', availableOptions.map(o => o.value));
     if (availableOptions.length === 0) {
       fvsSelect.innerHTML = '<option value="" disabled selected>Nenhum serviço neste pavimento</option>';
       State.CURRENT_FVS = previousFVS || '';
-      console.log('[doge:isolate-floor] Nenhuma FVS disponível no pavimento:', lv, 'preservando previousFVS=', previousFVS);
     } else if (previousFVS && availableOptions.some(o => o.value === previousFVS)) {
       fvsSelect.value = previousFVS;
       State.CURRENT_FVS = previousFVS;
       applyFVSSelection(previousFVS, fvsIndex, false);
-      console.log('[doge:isolate-floor] Mantendo FVS anterior:', previousFVS);
     } else {
       fvsSelect.value = '';
       State.CURRENT_FVS = previousFVS || '';
-      console.log('[doge:isolate-floor] FVS anterior não disponível, dropdown vazio, preservando:', previousFVS);
     }
 
     render2DCards();
     render();
   }, { passive: true });
+
+  setupHudResizeObserver();
 }
 
 function wireEvents(fvsIndex) {
   fvsSelect?.addEventListener('change', () => {
     const key = normFVSKey(fvsSelect.value);
-    console.log(`[fvsSelect:change] Selected FVS: ${key}`);
     applyFVSSelection(key, fvsIndex, true);
     render2DCards();
     render();
@@ -479,16 +624,12 @@ function wireEvents(fvsIndex) {
     const prefs = loadPrefs() || {};
     prefs.nc = State.NC_MODE;
     savePrefs(prefs);
-    console.log(`[btnNC] NC_MODE=${State.NC_MODE}`);
     populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, window.DOGE?.__isoPavPrefix ?? null);
     if (fvsSelect.value) {
-      console.log(`[btnNC] Applying FVS: ${fvsSelect.value}`);
       applyFVSSelection(fvsSelect.value, fvsIndex, false);
     } else if (State.CURRENT_FVS && fvsIndex.has(State.CURRENT_FVS)) {
-      console.log(`[btnNC] Reapplying previous FVS: ${State.CURRENT_FVS}`);
       applyFVSSelection(State.CURRENT_FVS, fvsIndex, false);
     } else {
-      console.log(`[btnNC] No valid FVS, calling applyFVSAndRefresh`);
       applyFVSAndRefresh();
     }
     render2DCards();
@@ -503,16 +644,12 @@ function wireEvents(fvsIndex) {
     const prefs = loadPrefs() || {};
     prefs.inProgress = State.IN_PROGRESS_MODE;
     savePrefs(prefs);
-    console.log(`[btnInProgress] IN_PROGRESS_MODE=${State.IN_PROGRESS_MODE}`);
     populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, window.DOGE?.__isoPavPrefix ?? null);
     if (fvsSelect.value) {
-      console.log(`[btnInProgress] Applying FVS: ${fvsSelect.value}`);
       applyFVSSelection(fvsSelect.value, fvsIndex, false);
     } else if (State.CURRENT_FVS && fvsIndex.has(State.CURRENT_FVS)) {
-      console.log(`[btnInProgress] Reapplying previous FVS: ${State.CURRENT_FVS}`);
       applyFVSSelection(State.CURRENT_FVS, fvsIndex, false);
     } else {
-      console.log(`[btnInProgress] No valid FVS, calling applyFVSAndRefresh`);
       applyFVSAndRefresh();
     }
     render2DCards();
@@ -731,5 +868,3 @@ function setupHudResizeObserver() {
     ro.observe(hudEl);
   }
 }
-
-setupHudResizeObserver();
