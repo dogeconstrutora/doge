@@ -255,7 +255,7 @@ function hasNC(row){
 function hasPend(row){
   if (!row) return false;
   const pend = Number(row.qtd_pend_ultima_inspecao ?? row.pendencias ?? 0) || 0;
-  console.log(`[hasPend] row.local_origem=${row.local_origem}, qtd_pend_ultima_inspecao=${row.qtd_pend_ultima_inspecao}, pendencias=${row.pendencias}, pend=${pend}`);
+  //console.log(`[hasPend] row.local_origem=${row.local_origem}, qtd_pend_ultima_inspecao=${row.qtd_pend_ultima_inspecao}, pendencias=${row.pendencias}, pend=${pend}`);
   return pend > 0;
 }
 
@@ -287,7 +287,7 @@ export function recolorCards2D(){
     const durN = Math.max(0, Math.round(Number(row?.duracao_real ?? row?.duracao ?? row?.duracao_inicial ?? 0) || 0));
     const inProgress = isInProgress(row);
 
-    console.log(`[recolorCards2D] apt=${apt}, nc=${nc}, pend=${pend}, inProgress=${inProgress}, IN_PROGRESS_MODE=${IN_PROGRESS_MODE}, color=${pickFVSColor(apt, pav, State.COLOR_MAP)}`);
+    //console.log(`[recolorCards2D] apt=${apt}, nc=${nc}, pend=${pend}, inProgress=${inProgress}, IN_PROGRESS_MODE=${IN_PROGRESS_MODE}, color=${pickFVSColor(apt, pav, State.COLOR_MAP)}`);
 
     const showData = !!row && (!NC_MODE || nc > 0) && (!IN_PROGRESS_MODE || inProgress);
 

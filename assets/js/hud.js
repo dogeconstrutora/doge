@@ -63,11 +63,7 @@ function buildFVSIndexFromLists(fvsStrings, apts) {
       if (Number.isFinite(levelIdx)) {
         r.__levelIdx = levelIdx;
         b.levels.add(levelIdx);
-      } else {
-        console.warn(`[hud] Não foi possível associar levelIdx para row:`, r);
       }
-    } else {
-      console.warn(`[hud] Apartamento sem exactKey (nome/local_origem):`, r);
     }
   }
 
@@ -76,13 +72,13 @@ function buildFVSIndexFromLists(fvsStrings, apts) {
 }
 
 // === Compat: applyFVSAndRefresh (chamada pelo viewer.js) ===
-export function applyFVSAndRefresh(){
+export function applyFVSAndRefresh() {
   const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
 
   let key = State.CURRENT_FVS || '';
   if (!key && State.CURRENT_FVS_LABEL) key = normFVSKey(State.CURRENT_FVS_LABEL);
 
-  if (!key || !fvsIndex.has(key)){
+  if (!key || !fvsIndex.has(key)) {
     const ord = fvsIndex.__order || Array.from(fvsIndex.keys());
     key = ord[0] || '';
   }
@@ -92,7 +88,7 @@ export function applyFVSAndRefresh(){
     if (key && fvsIndex.has(key)) fvsSelect.value = key;
   }
 
-  if (key) applyFVSSelection(key, fvsIndex);
+  if (key) applyFVSSelection(key, fvsIndex, false);
 
   render2DCards();
   render();
@@ -193,18 +189,41 @@ function populateFVSSelect(selectEl, fvsIndex, showNCOnly = false, showInProgres
   }
 }
 
-function applyFVSSelection(fvsKey, fvsIndex){
+function applyFVSSelection(fvsKey, fvsIndex, isManualSelection = false) {
   const bucket = fvsIndex.get(fvsKey);
-  const rows   = bucket?.rows || [];
+  const rows = bucket?.rows || [];
+
+  console.log(`[applyFVSSelection] fvsKey=${fvsKey}, isManualSelection=${isManualSelection}, rows.length=${rows.length}`);
 
   State.CURRENT_FVS = fvsKey;
   State.CURRENT_FVS_LABEL = bucket?.label || '';
 
+  // Salvar FVS no cache e na URL
+  const prefs = loadPrefs() || {};
+  if (fvsKey) {
+    prefs.fvs = fvsKey;
+    setQS({ fvs: fvsKey });
+    console.log(`[applyFVSSelection] Saved fvsKey=${fvsKey} to prefs and URL`);
+    if (isManualSelection) {
+      window.DOGE.__lastManualFVS = fvsKey;
+      console.log(`[applyFVSSelection] Updated __lastManualFVS=${fvsKey}`);
+    }
+  } else {
+    prefs.fvs = '';
+    setQS({ fvs: null });
+    console.log(`[applyFVSSelection] Cleared fvsKey from prefs and URL`);
+    if (isManualSelection) {
+      window.DOGE.__lastManualFVS = '';
+      console.log(`[applyFVSSelection] Cleared __lastManualFVS`);
+    }
+  }
+  savePrefs(prefs);
+
   setRowsResolver2D(() => rows);
 
   const byName = bucket?.rowsByNameKey || new Map();
-  setRowResolver3D((rawName)=>{
-    const nm = String(rawName||'').trim();
+  setRowResolver3D((rawName) => {
+    const nm = String(rawName || '').trim();
     if (!nm) return null;
     return bestRowForName(nm, byName);
   });
@@ -224,25 +243,25 @@ function applyFVSSelection(fvsKey, fvsIndex){
 // ============================
 // Inicialização pública
 // ============================
-export function initHUD(){
-  hudEl        = document.getElementById('hud');
-  fvsSelect    = document.getElementById('fvsSelect');
-  btnNC        = document.getElementById('btnNC');
+export function initHUD() {
+  hudEl = document.getElementById('hud');
+  fvsSelect = document.getElementById('fvsSelect');
+  btnNC = document.getElementById('btnNC');
   btnInProgress = document.getElementById('btnInProgress');
-  btn2D        = document.getElementById('btn2D');
-  btnZoom2D    = document.getElementById('btnZoom2D');
-  btnResetAll  = document.getElementById('btnResetAll');
+  btn2D = document.getElementById('btn2D');
+  btnZoom2D = document.getElementById('btnZoom2D');
+  btnResetAll = document.getElementById('btnResetAll');
 
-  rowSliders     = document.getElementById('row-sliders');
-  opacityRange   = document.getElementById('opacity');
+  rowSliders = document.getElementById('row-sliders');
+  opacityRange = document.getElementById('opacity');
   explodeXYRange = document.getElementById('explodeXY');
-  explodeYRange  = document.getElementById('explodeY');
+  explodeYRange = document.getElementById('explodeY');
 
   floorLimitRange = document.getElementById('floorLimit');
   floorLimitValue = document.getElementById('floorLimitValue');
   floorLimitGroup = document.getElementById('floorLimitGroup')
-                        || floorLimitRange?.closest('.control')
-                        || floorLimitRange?.parentElement;
+    || floorLimitRange?.closest('.control')
+    || floorLimitRange?.parentElement;
 
   if (!hudEl) return;
 
@@ -257,7 +276,7 @@ export function initHUD(){
     if (!obraQS && obraCache) {
       const url = new URL(location.href);
       url.searchParams.set('obra', obraCache);
-      if (fvsCache) url.searchParams.set('fvs', fvsCache); // Adiciona FVS salva na URL
+      if (fvsCache) url.searchParams.set('fvs', fvsCache);
       location.replace(url.toString());
       return;
     }
@@ -328,8 +347,8 @@ export function initHUD(){
   if (initialKey) {
     fvsSelect.value = initialKey;
     State.CURRENT_FVS = initialKey;
-    window.DOGE.__lastManualFVS = initialKey; // Inicializa com a FVS salva
-    applyFVSSelection(initialKey, fvsIndex);
+    window.DOGE.__lastManualFVS = initialKey;
+    applyFVSSelection(initialKey, fvsIndex, false);
   } else {
     fvsSelect.value = '';
     State.CURRENT_FVS = '';
@@ -384,7 +403,7 @@ export function initHUD(){
 
     const max = Number(getMaxLevel?.() ?? 0) || 0;
     const fvsIndex = buildFVSIndexFromLists(fvsList || [], apartamentos || []);
-    const previousFVS = State.CURRENT_FVS; // Armazena FVS anterior
+    const previousFVS = State.CURRENT_FVS;
     console.log('[doge:isolate-floor] Starting: levelIdx=', lv, 'previousFVS=', previousFVS, 'fvsIndex=', Array.from(fvsIndex.keys()));
 
     // Toggle: se já está isolado nesse mesmo nível → desfaz (mostrar todos)
@@ -396,39 +415,16 @@ export function initHUD(){
       if (typeof showAllFloors === 'function') showAllFloors();
       if (floorLimitRange) floorLimitRange.value = String(max);
       if (floorLimitValue) floorLimitValue.textContent = '—all—';
-      // Repopular dropdown com todas as FVS
       populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, null);
-      // Restaurar a última FVS selecionada manualmente, se existir; senão, a FVS anterior
       const targetFVS = window.DOGE.__lastManualFVS || previousFVS;
       if (targetFVS && fvsIndex.has(targetFVS)) {
         fvsSelect.value = targetFVS;
         State.CURRENT_FVS = targetFVS;
-        applyFVSSelection(targetFVS, fvsIndex);
-        // Salvar no localStorage e na URL
-        const prefs = loadPrefs() || {};
-        prefs.fvs = targetFVS;
-        savePrefs(prefs);
-        setQS({ fvs: targetFVS });
-        console.log('[doge:isolate-floor] Restaurando e salvando FVS:', targetFVS);
-      } else if (fvsSelect.options.length > 0) {
-        // Se não houver FVS anterior válida, não selecionar nada
+        applyFVSSelection(targetFVS, fvsIndex, false);
+      } else {
         fvsSelect.value = '';
         State.CURRENT_FVS = '';
-        // Limpar prefs.fvs e URL
-        const prefs = loadPrefs() || {};
-        prefs.fvs = '';
-        savePrefs(prefs);
-        setQS({ fvs: null });
-        console.log('[doge:isolate-floor] Nenhuma FVS anterior válida, dropdown vazio');
-      } else {
-        fvsSelect.innerHTML = '<option value="" disabled selected>Nenhuma FVS encontrada</option>';
-        State.CURRENT_FVS = '';
-        // Limpar prefs.fvs e URL
-        const prefs = loadPrefs() || {};
-        prefs.fvs = '';
-        savePrefs(prefs);
-        setQS({ fvs: null });
-        console.log('[doge:isolate-floor] Nenhuma FVS disponível após desfazer');
+        applyFVSSelection('', fvsIndex, false);
       }
       render2DCards();
       render();
@@ -442,62 +438,35 @@ export function initHUD(){
     if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
     if (floorLimitRange) floorLimitRange.value = String(lv);
     if (floorLimitValue) floorLimitValue.textContent = String(lv);
-    // Filtrar dropdown por pavimento
     populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, window.DOGE.__isoPavPrefix);
 
-    // Verificar opções disponíveis
     const availableOptions = [...fvsSelect.options].filter(o => o.value && !o.disabled);
     console.log('[doge:isolate-floor] Após populate: availableOptions=', availableOptions.map(o => o.value));
     if (availableOptions.length === 0) {
       fvsSelect.innerHTML = '<option value="" disabled selected>Nenhum serviço neste pavimento</option>';
-      State.CURRENT_FVS = previousFVS || ''; // Preserva FVS anterior
+      State.CURRENT_FVS = previousFVS || '';
       console.log('[doge:isolate-floor] Nenhuma FVS disponível no pavimento:', lv, 'preservando previousFVS=', previousFVS);
     } else if (previousFVS && availableOptions.some(o => o.value === previousFVS)) {
-      // Se a FVS anterior está disponível, mantê-la selecionada
       fvsSelect.value = previousFVS;
       State.CURRENT_FVS = previousFVS;
-      applyFVSSelection(previousFVS, fvsIndex);
-      // Salvar no localStorage e na URL
-      const prefs = loadPrefs() || {};
-      prefs.fvs = previousFVS;
-      savePrefs(prefs);
-      setQS({ fvs: previousFVS });
-      console.log('[doge:isolate-floor] Mantendo e salvando FVS anterior:', previousFVS);
+      applyFVSSelection(previousFVS, fvsIndex, false);
+      console.log('[doge:isolate-floor] Mantendo FVS anterior:', previousFVS);
     } else {
-      // Se a FVS anterior não está disponível, deixar dropdown sem seleção
       fvsSelect.value = '';
-      State.CURRENT_FVS = previousFVS || ''; // Preserva FVS anterior
+      State.CURRENT_FVS = previousFVS || '';
       console.log('[doge:isolate-floor] FVS anterior não disponível, dropdown vazio, preservando:', previousFVS);
     }
 
     render2DCards();
     render();
   }, { passive: true });
-
-  function setupHudResizeObserver(){
-    if (!hudEl) return;
-    if ('ResizeObserver' in window){
-      const ro = new ResizeObserver(()=>{
-        if (State.flatten2D >= 0.95){
-          render2DCards();
-        }
-      });
-      ro.observe(hudEl);
-    }
-  }
-
-  setupHudResizeObserver();
 }
 
-function wireEvents(fvsIndex){
+function wireEvents(fvsIndex) {
   fvsSelect?.addEventListener('change', () => {
     const key = normFVSKey(fvsSelect.value);
-    setQS({ fvs: key || null });
-    const prefs = loadPrefs() || {};
-    prefs.fvs = key;
-    savePrefs(prefs);
-    window.DOGE.__lastManualFVS = key; // Registra a FVS selecionada manualmente
-    applyFVSSelection(key, fvsIndex);
+    console.log(`[fvsSelect:change] Selected FVS: ${key}`);
+    applyFVSSelection(key, fvsIndex, true);
     render2DCards();
     render();
   });
@@ -510,10 +479,18 @@ function wireEvents(fvsIndex){
     const prefs = loadPrefs() || {};
     prefs.nc = State.NC_MODE;
     savePrefs(prefs);
+    console.log(`[btnNC] NC_MODE=${State.NC_MODE}`);
     populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, window.DOGE?.__isoPavPrefix ?? null);
-    if (fvsSelect.value) applyFVSSelection(fvsSelect.value, fvsIndex);
-    else if (State.CURRENT_FVS && fvsIndex.has(State.CURRENT_FVS)) applyFVSSelection(State.CURRENT_FVS, fvsIndex);
-    else applyFVSAndRefresh();
+    if (fvsSelect.value) {
+      console.log(`[btnNC] Applying FVS: ${fvsSelect.value}`);
+      applyFVSSelection(fvsSelect.value, fvsIndex, false);
+    } else if (State.CURRENT_FVS && fvsIndex.has(State.CURRENT_FVS)) {
+      console.log(`[btnNC] Reapplying previous FVS: ${State.CURRENT_FVS}`);
+      applyFVSSelection(State.CURRENT_FVS, fvsIndex, false);
+    } else {
+      console.log(`[btnNC] No valid FVS, calling applyFVSAndRefresh`);
+      applyFVSAndRefresh();
+    }
     render2DCards();
     render();
   });
@@ -526,10 +503,18 @@ function wireEvents(fvsIndex){
     const prefs = loadPrefs() || {};
     prefs.inProgress = State.IN_PROGRESS_MODE;
     savePrefs(prefs);
+    console.log(`[btnInProgress] IN_PROGRESS_MODE=${State.IN_PROGRESS_MODE}`);
     populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, window.DOGE?.__isoPavPrefix ?? null);
-    if (fvsSelect.value) applyFVSSelection(fvsSelect.value, fvsIndex);
-    else if (State.CURRENT_FVS && fvsIndex.has(State.CURRENT_FVS)) applyFVSSelection(State.CURRENT_FVS, fvsIndex);
-    else applyFVSAndRefresh();
+    if (fvsSelect.value) {
+      console.log(`[btnInProgress] Applying FVS: ${fvsSelect.value}`);
+      applyFVSSelection(fvsSelect.value, fvsIndex, false);
+    } else if (State.CURRENT_FVS && fvsIndex.has(State.CURRENT_FVS)) {
+      console.log(`[btnInProgress] Reapplying previous FVS: ${State.CURRENT_FVS}`);
+      applyFVSSelection(State.CURRENT_FVS, fvsIndex, false);
+    } else {
+      console.log(`[btnInProgress] No valid FVS, calling applyFVSAndRefresh`);
+      applyFVSAndRefresh();
+    }
     render2DCards();
     render();
   });
@@ -604,14 +589,14 @@ function wireEvents(fvsIndex){
     render();
   });
 
-  btn2D?.addEventListener('click', ()=>{
+  btn2D?.addEventListener('click', () => {
     const turningOn = !(State.flatten2D >= 0.95);
 
     State.flatten2D = turningOn ? 1 : 0;
     btn2D.setAttribute('aria-pressed', String(turningOn));
     btn2D.classList.toggle('active', turningOn);
 
-    if (turningOn){
+    if (turningOn) {
       if (floorLimitRange) floorLimitRange.style.display = 'none';
       if (floorLimitValue) floorLimitValue.style.display = 'none';
       clear3DHighlight();
@@ -621,7 +606,7 @@ function wireEvents(fvsIndex){
 
       if (rowSliders) rowSliders.style.display = 'none';
 
-      if (btnZoom2D){
+      if (btnZoom2D) {
         btnZoom2D.style.display = 'inline-flex';
         setGridZoom(1);
         const sym = getNextGridZoomSymbolFrom(1);
@@ -629,7 +614,7 @@ function wireEvents(fvsIndex){
       }
 
       render2DCards();
-    }else{
+    } else {
       if (floorLimitRange) floorLimitRange.style.display = '';
       if (floorLimitValue) floorLimitValue.style.display = '';
       apply2DVisual(false);
@@ -641,12 +626,12 @@ function wireEvents(fvsIndex){
     render();
   });
 
-  btnZoom2D?.addEventListener('click', ()=>{
+  btnZoom2D?.addEventListener('click', () => {
     const host = document.getElementById('cards2d');
     const focalY = host ? Math.floor(host.clientHeight / 2) : 0;
-    const focalX = host ? Math.floor(host.clientWidth  / 2) : 0;
+    const focalX = host ? Math.floor(host.clientWidth / 2) : 0;
 
-    with2DScrollPreserved(()=>{
+    with2DScrollPreserved(() => {
       const reached = zoom2DStep();
       const sym = getNextGridZoomSymbolFrom(reached);
       btnZoom2D.textContent = (sym === '+') ? '🔍+' : '🔍−';
@@ -657,36 +642,36 @@ function wireEvents(fvsIndex){
 function with2DScrollPreserved(
   action,
   { containerId = 'cards2d', focalY, focalX } = {}
-){
+) {
   const host = document.getElementById(containerId);
-  if (!host){ action?.(); return; }
+  if (!host) { action?.(); return; }
 
-  const preTop   = host.scrollTop;
-  const preH     = host.scrollHeight  || 1;
-  const preLeft  = host.scrollLeft;
-  const preW     = host.scrollWidth   || 1;
+  const preTop = host.scrollTop;
+  const preH = host.scrollHeight || 1;
+  const preLeft = host.scrollLeft;
+  const preW = host.scrollWidth || 1;
 
   const fy = (typeof focalY === 'number')
     ? focalY
     : Math.max(0, Math.min(host.clientHeight, Math.floor(host.clientHeight / 2)));
   const fx = (typeof focalX === 'number')
     ? focalX
-    : Math.max(0, Math.min(host.clientWidth,  Math.floor(host.clientWidth  / 2)));
+    : Math.max(0, Math.min(host.clientWidth, Math.floor(host.clientWidth / 2)));
 
-  const yAbs = preTop  + fy;
+  const yAbs = preTop + fy;
   const xAbs = preLeft + fx;
 
   const cards = Array.from(host.querySelectorAll('.card'));
   let anchor = null, anchorPrevY = null, anchorPrevX = null, anchorKey = null;
   let bestY = Infinity, bestX = Infinity;
 
-  for (const el of cards){
-    const cy = Number.parseFloat(el.style.top)  || el.offsetTop  || 0;
+  for (const el of cards) {
+    const cy = Number.parseFloat(el.style.top) || el.offsetTop || 0;
     const cx = Number.parseFloat(el.style.left) || el.offsetLeft || 0;
     const dy = Math.abs(cy - yAbs);
     const dx = Math.abs(cx - xAbs);
 
-    if (dy < bestY || (dy === bestY && dx < bestX)){
+    if (dy < bestY || (dy === bestY && dx < bestX)) {
       bestY = dy; bestX = dx;
       anchor = el;
       anchorPrevY = cy;
@@ -697,49 +682,49 @@ function with2DScrollPreserved(
 
   action?.();
 
-  const restore = ()=>{
+  const restore = () => {
     let newAnchor = null, newY = null, newX = null;
-    if (anchorKey){
-      const [apt,pav] = anchorKey.split('|');
+    if (anchorKey) {
+      const [apt, pav] = anchorKey.split('|');
       newAnchor = Array.from(host.querySelectorAll('.card'))
         .find(el => el.dataset.apto === apt && el.dataset.pav === pav) || null;
-      if (newAnchor){
-        newY = Number.parseFloat(newAnchor.style.top)  || newAnchor.offsetTop  || 0;
+      if (newAnchor) {
+        newY = Number.parseFloat(newAnchor.style.top) || newAnchor.offsetTop || 0;
         newX = Number.parseFloat(newAnchor.style.left) || newAnchor.offsetLeft || 0;
       }
     }
 
-    if (newAnchor != null && anchorPrevY != null && anchorPrevX != null){
+    if (newAnchor != null && anchorPrevY != null && anchorPrevX != null) {
       const dy = newY - anchorPrevY;
       const dx = newX - anchorPrevX;
-      host.scrollTop  = preTop  + dy;
+      host.scrollTop = preTop + dy;
       host.scrollLeft = preLeft + dx;
     } else {
       const newH = host.scrollHeight || 1;
-      const newW = host.scrollWidth  || 1;
+      const newW = host.scrollWidth || 1;
 
       const ratioY = newH / preH;
       const ratioX = newW / preW;
 
-      const desiredTop  = ((preTop  + fy) * ratioY) - fy;
+      const desiredTop = ((preTop + fy) * ratioY) - fy;
       const desiredLeft = ((preLeft + fx) * ratioX) - fx;
 
-      const maxTop  = Math.max(0, newH - host.clientHeight);
+      const maxTop = Math.max(0, newH - host.clientHeight);
       const maxLeft = Math.max(0, newW - host.clientWidth);
 
-      host.scrollTop  = Math.max(0, Math.min(maxTop,  desiredTop));
+      host.scrollTop = Math.max(0, Math.min(maxTop, desiredTop));
       host.scrollLeft = Math.max(0, Math.min(maxLeft, desiredLeft));
     }
   };
 
-  requestAnimationFrame(()=> requestAnimationFrame(restore));
+  requestAnimationFrame(() => requestAnimationFrame(restore));
 }
 
-function setupHudResizeObserver(){
+function setupHudResizeObserver() {
   if (!hudEl) return;
-  if ('ResizeObserver' in window){
-    const ro = new ResizeObserver(()=>{
-      if (State.flatten2D >= 0.95){
+  if ('ResizeObserver' in window) {
+    const ro = new ResizeObserver(() => {
+      if (State.flatten2D >= 0.95) {
         render2DCards();
       }
     });

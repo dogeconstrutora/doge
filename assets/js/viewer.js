@@ -354,7 +354,7 @@ function wireLongPressIsolateFloor(){
 
     // (Sem outros handlers de input aqui — tudo vive em scene.js)
   } catch (err){
-    console.error('[viewer] erro no boot:', err);
+    //console.error('[viewer] erro no boot:', err);
   }
 })();
 

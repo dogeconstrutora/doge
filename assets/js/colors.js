@@ -22,24 +22,35 @@ export const PALETTE = {
 // ------------------------------------------------------------------
 
 // === NORMAL ===
-export function colorFromRowNormal(row){
-  if (!row) return PALETTE.gray;
+// === NORMAL ===
+export function colorFromRowNormal(row) {
+  if (!row) {
+    //console.log('[colorFromRowNormal] Row is null or undefined, returning gray');
+    return PALETTE.gray;
+  }
 
-  const nc   = Number(row?.qtd_nao_conformidades_ultima_inspecao ?? 0) || 0;
+  const nc = Number(row?.qtd_nao_conformidades_ultima_inspecao ?? 0) || 0;
   const pend = Number(row?.qtd_pend_ultima_inspecao ?? 0) || 0;
-  const pct  = Number(row?.percentual_ultima_inspecao);
+  const pct = Number(row?.percentual_ultima_inspecao ?? 0) || 0;
   const terminouInicial = !!row?.data_termino_inicial;
+  const key = String(row?.local_origem ?? row?.nome ?? '').trim();
+
+  //console.log(`[colorFromRowNormal] key=${key}, nc=${nc}, pend=${pend}, pct=${pct}, terminouInicial=${terminouInicial}`);
 
   // Em andamento → azul (ainda não tem término inicial)
-  if (!terminouInicial) return PALETTE.blue;
+  if (!terminouInicial) {
+    //console.log(`[colorFromRowNormal] key=${key}, not finished, returning blue`);
+    return PALETTE.blue;
+  }
 
   // Concluído 100% sem pend/NC → verde; senão → amarelo
   const ultimaOK = (pct === 100 && pend === 0 && nc === 0);
+  //console.log(`[colorFromRowNormal] key=${key}, ultimaOK=${ultimaOK}, returning ${ultimaOK ? 'green' : 'yellow'}`);
   return ultimaOK ? PALETTE.green : PALETTE.yellow;
 }
 
 // === MODO NC ===
-export function colorFromRowNC(row){
+export function colorFromRowNC(row) {
   const nc = Number(row?.qtd_nao_conformidades_ultima_inspecao ?? 0) || 0;
   return (nc > 0) ? PALETTE.red : COLOR_DEFAULT; // sem NC → neutro
 }
@@ -47,33 +58,33 @@ export function colorFromRowNC(row){
 // === MODO EM ANDAMENTO ===
 export function colorFromRowInProgress(row) {
   if (!row) {
-    console.log('[colorFromRowInProgress] Row is null or undefined, returning gray');
+    //console.log('[colorFromRowInProgress] Row is null or undefined, returning gray');
     return PALETTE.gray;
   }
 
   const nc = Number(row?.qtd_nao_conformidades_ultima_inspecao ?? 0) || 0;
   const pend = Number(row?.qtd_pend_ultima_inspecao ?? row?.pendencias ?? 0) || 0;
+  const pct = Number(row?.percentual_ultima_inspecao ?? 0) || 0;
   const terminouInicial = !!row?.data_termino_inicial;
   const key = String(row?.local_origem ?? row?.nome ?? '').trim();
 
-  console.log(`[colorFromRowInProgress] key=${key}, nc=${nc}, pend=${pend}, terminouInicial=${terminouInicial}`);
+  //console.log(`[colorFromRowInProgress] key=${key}, nc=${nc}, pend=${pend}, pct=${pct}, terminouInicial=${terminouInicial}`);
 
   if (nc > 0) {
-    console.log(`[colorFromRowInProgress] key=${key}, NC > 0, returning red`);
+    //console.log(`[colorFromRowInProgress] key=${key}, NC > 0, returning red`);
     return PALETTE.red; // Vermelho para NC
   }
   if (!terminouInicial) {
-    console.log(`[colorFromRowInProgress] key=${key}, not finished, returning blue`);
+    //console.log(`[colorFromRowInProgress] key=${key}, not finished, returning blue`);
     return PALETTE.blue; // Azul para em andamento (mesmo com pendências)
   }
-  if (pend > 0) {
-    console.log(`[colorFromRowInProgress] key=${key}, pend > 0, returning yellow`);
-    return PALETTE.yellow; // Amarelo para pendências (finalizados)
+  if (pend > 0 || pct < 100) {
+    //console.log(`[colorFromRowInProgress] key=${key}, pend > 0 or pct < 100, returning yellow`);
+    return PALETTE.yellow; // Amarelo para pendências ou incompleto
   }
-  console.log(`[colorFromRowInProgress] key=${key}, finalized perfectly, returning gray`);
+  //console.log(`[colorFromRowInProgress] key=${key}, finalized perfectly, returning gray`);
   return COLOR_DEFAULT; // Cinza para finalizados perfeitos
 }
-
 // ------------------------------------------------------------------
 // Color map por FVS (NORMAL)
 // Agora a chave principal é `local_origem` (quando disponível), com
