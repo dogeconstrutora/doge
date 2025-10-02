@@ -78,11 +78,6 @@
     <div class="row hud-row-2 nowrap" id="row-sliders">
       <!--<label for="opacity" title="Opacidade">🌫️</label>
       //<input id="opacity" type="range" min="0" max="100" value="100" class="slim" />-->
-      <div class="floor-control">
-        <button id="btnFloorUp" aria-label="Subir para o próximo pavimento">⬆️</button>
-        <span id="floorDisplay">—</span>
-        <button id="btnFloorDown" aria-label="Descer para o pavimento anterior">⬇️</button>
-      </div>
       <div class="sliders">
       <label for="explodeXY" title="Explodir X">↔</label>
       <input id="explodeXY" type="range" min="0" max="4" step="0.01" value="0" class="slim" />
@@ -92,6 +87,11 @@
       </div>
       <!-- Reset geral (volta tudo pro estado inicial) -->
       <button id="btnResetAll" title="Resetar visual" aria-label="Resetar visual">🔁</button>
+      <div class="floor-control">
+        <button id="btnFloorUp" aria-label="Subir para o próximo pavimento">⬆️</button>
+        <span id="floorDisplay">—</span>
+        <button id="btnFloorDown" aria-label="Descer para o pavimento anterior">⬇️</button>
+      </div>      
     </div>
   </div>
 
@@ -99,3 +99,4 @@
   <script type="module" src="./assets/js/viewer.js"></script>
 </body>
 </html>
+
