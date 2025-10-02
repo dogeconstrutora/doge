@@ -17,7 +17,7 @@ import { normFVSKey, bestRowForName, isHierarchyMatch } from './utils.js';
 import { apartamentos, fvsList } from './data.js';
 
 // ---- elementos
-let hudEl, rowSliders, fvsSelect, btnNC, btnInProgress, opacityRange, explodeXYRange, explodeYRange, btn2D, btnZoom2D, btnResetAll, floorLimitRange, floorLimitValue, floorLimitGroup, btnSettings;
+let hudEl, rowSliders, fvsSelect, btnNC, btnInProgress, opacityRange, explodeXYRange, explodeYRange, btn2D, btnZoom2D, btnResetAll, btnFloorUp, btnFloorDown, floorDisplay, btnSettings;
 
 // ============================
 // Índice FVS -> rows / lookup por nome (ORDEM = fvsList)
@@ -394,11 +394,9 @@ export function initHUD() {
   explodeXYRange = document.getElementById('explodeXY');
   explodeYRange = document.getElementById('explodeY');
 
-  floorLimitRange = document.getElementById('floorLimit');
-  floorLimitValue = document.getElementById('floorLimitValue');
-  floorLimitGroup = document.getElementById('floorLimitGroup')
-    || floorLimitRange?.closest('.control')
-    || floorLimitRange?.parentElement;
+  btnFloorUp = document.getElementById('btnFloorUp');
+  btnFloorDown = document.getElementById('btnFloorDown');
+  floorDisplay = document.getElementById('floorDisplay');
 
   if (!hudEl) {
     return;
@@ -449,13 +447,22 @@ export function initHUD() {
   btn2D?.setAttribute('aria-pressed', String(is2D));
   btn2D?.classList.toggle('active', is2D);
 
-  const floorLabel = document.querySelector('label[for="floorLimit"]');
+  const maxLvl = getMaxLevel() || 0;
+if (btnFloorUp && btnFloorDown && floorDisplay) {
+  window.DOGE.__isoFloor = null; // Força o estado inicial como "todos os pavimentos"
+  window.DOGE.__isoPavPrefix = null;
+  floorDisplay.textContent = '—';
+  btnFloorUp.disabled = false;
+  btnFloorDown.disabled = true;
+
+  showAllFloors();
+  applyFloorLimit(maxLvl);
+}
 
   const toggle2DUI = (on) => {
     if (rowSliders) rowSliders.style.display = on ? 'none' : '';
-    [floorLabel, floorLimitRange, floorLimitValue].forEach(el => {
-      if (el) el.style.display = on ? 'none' : '';
-    });
+    const floorControl = document.querySelector('.floor-control');
+    if (floorControl) floorControl.style.display = on ? 'none' : '';
     if (btnZoom2D) {
       btnZoom2D.textContent = '🔍' + getNextGridZoomSymbol();
       btnZoom2D.style.display = on ? 'inline-flex' : 'none';
@@ -487,24 +494,6 @@ export function initHUD() {
     fvsSelect.value = '';
     State.CURRENT_FVS = '';
     window.DOGE.__lastManualFVS = '';
-  }
-
-  const maxLvl = getMaxLevel();
-  if (floorLimitRange) {
-    floorLimitRange.min = '0';
-    floorLimitRange.max = String(maxLvl);
-    floorLimitRange.step = '1';
-
-    showAllFloors();
-    if (!floorLimitRange.value) floorLimitRange.value = '0';
-    if (floorLimitValue) floorLimitValue.textContent = '—';
-
-    floorLimitRange.addEventListener('input', () => {
-      const lv = Number(floorLimitRange.value) || 0;
-      showOnlyFloor(lv);
-      if (floorLimitValue) floorLimitValue.textContent = `${lv}`;
-      render();
-    });
   }
 
   wireEvents(fvsIndex);
@@ -563,8 +552,9 @@ export function initHUD() {
       window.DOGE.__isoPavPrefix = null;
       if (typeof applyFloorLimit === 'function') applyFloorLimit(max);
       if (typeof showAllFloors === 'function') showAllFloors();
-      if (floorLimitRange) floorLimitRange.value = String(max);
-      if (floorLimitValue) floorLimitValue.textContent = '—all—';
+      if (floorDisplay) floorDisplay.textContent = '—';
+      if (btnFloorUp) btnFloorUp.disabled = false;
+      if (btnFloorDown) btnFloorDown.disabled = true;
       populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, null);
       const targetFVS = window.DOGE.__lastManualFVS || previousFVS;
       if (targetFVS && fvsIndex.has(targetFVS)) {
@@ -584,8 +574,9 @@ export function initHUD() {
     window.DOGE.__isoFloor = lv;
     window.DOGE.__isoPavPrefix = getPavimentoPrefixForLevel(lv);
     if (typeof showOnlyFloor === 'function') showOnlyFloor(lv);
-    if (floorLimitRange) floorLimitRange.value = String(lv);
-    if (floorLimitValue) floorLimitValue.textContent = String(lv);
+    if (floorDisplay) floorDisplay.textContent = String(lv);
+    if (btnFloorUp) btnFloorUp.disabled = lv >= max;
+    if (btnFloorDown) btnFloorDown.disabled = lv <= 0;
     populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, window.DOGE.__isoPavPrefix);
 
     const availableOptions = [...fvsSelect.options].filter(o => o.value && !o.disabled);
@@ -664,7 +655,7 @@ function wireEvents(fvsIndex) {
   });
 
   explodeXYRange?.addEventListener('input', () => {
-    State.explodeXY = Number(explodeXYRange.value) || 0;
+    State.explodeXY = (Number(explodeXYRange.value) || 0) * 4;
     applyExplode();
     render();
   });
@@ -674,6 +665,39 @@ function wireEvents(fvsIndex) {
     applyExplode();
     render();
   });
+
+  if (btnFloorUp && btnFloorDown && floorDisplay) {
+    const maxLvl = getMaxLevel() || 0;
+    btnFloorUp.addEventListener('click', () => {
+      let current = Number(window.DOGE.__isoFloor);
+      if (!Number.isFinite(current)) current = -1;
+      const newFloor = Math.min(maxLvl, current + 1);
+      window.DOGE.__isoFloor = newFloor;
+      window.DOGE.__isoPavPrefix = getPavimentoPrefixForLevel(newFloor);
+      showOnlyFloor(newFloor);
+      floorDisplay.textContent = String(newFloor);
+      btnFloorUp.disabled = newFloor >= maxLvl;
+      btnFloorDown.disabled = newFloor <= 0;
+      populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, window.DOGE.__isoPavPrefix);
+      render2DCards();
+      render();
+    });
+
+    btnFloorDown.addEventListener('click', () => {
+      let current = Number(window.DOGE.__isoFloor);
+      if (!Number.isFinite(current)) current = maxLvl + 1;
+      const newFloor = Math.max(0, current - 1);
+      window.DOGE.__isoFloor = newFloor;
+      window.DOGE.__isoPavPrefix = getPavimentoPrefixForLevel(newFloor);
+      showOnlyFloor(newFloor);
+      floorDisplay.textContent = String(newFloor);
+      btnFloorUp.disabled = newFloor >= maxLvl;
+      btnFloorDown.disabled = newFloor <= 0;
+      populateFVSSelect(fvsSelect, fvsIndex, !!State.NC_MODE, !!State.IN_PROGRESS_MODE, window.DOGE.__isoPavPrefix);
+      render2DCards();
+      render();
+    });
+  }
 
   btnResetAll?.addEventListener('click', () => {
     State.faceOpacity = 0.30;
@@ -717,7 +741,18 @@ function wireEvents(fvsIndex) {
         btnZoom2D.textContent = '🔍' + getNextGridZoomSymbolFrom(1);
       }
       if (rowSliders) rowSliders.style.display = '';
+      const floorControl = document.querySelector('.floor-control');
+      if (floorControl) floorControl.style.display = '';
     }
+
+    window.DOGE.__isoFloor = null;
+    window.DOGE.__isoPavPrefix = null;
+    if (floorDisplay) floorDisplay.textContent = '—';
+    if (btnFloorUp) btnFloorUp.disabled = false;
+    if (btnFloorDown) btnFloorDown.disabled = true;
+    if (typeof applyFloorLimit === 'function') applyFloorLimit(getMaxLevel() || 0);
+    if (typeof showAllFloors === 'function') showAllFloors();
+    populateFVSSelect(fvsSelect, fvsIndex, false, false, null);
 
     applyExplode();
     recenterCamera({ theta: INITIAL_THETA, phi: INITIAL_PHI, animate: false, margin: 1.18 });
@@ -734,8 +769,8 @@ function wireEvents(fvsIndex) {
     btn2D.classList.toggle('active', turningOn);
 
     if (turningOn) {
-      if (floorLimitRange) floorLimitRange.style.display = 'none';
-      if (floorLimitValue) floorLimitValue.style.display = 'none';
+      const floorControl = document.querySelector('.floor-control');
+      if (floorControl) floorControl.style.display = 'none';
       clear3DHighlight();
 
       apply2DVisual(true);
@@ -752,8 +787,8 @@ function wireEvents(fvsIndex) {
 
       render2DCards();
     } else {
-      if (floorLimitRange) floorLimitRange.style.display = '';
-      if (floorLimitValue) floorLimitValue.style.display = '';
+      const floorControl = document.querySelector('.floor-control');
+      if (floorControl) floorControl.style.display = '';
       apply2DVisual(false);
       hide2D();
 
