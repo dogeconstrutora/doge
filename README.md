@@ -1,15 +1,15 @@
-# InMeta Torre e Grid
+# InMeta™ Torre e Grid
 
-O **InMeta Torre e Grid** é uma aplicação web interativa desenvolvida para visualizar e gerenciar o status de apartamentos em um projeto de construção ou inspeção. Com uma interface intuitiva, a aplicação permite filtrar e destacar apartamentos com base em seu progresso, pendências e não conformidades, utilizando uma representação visual colorida e organizada. Construído com HTML, CSS e JavaScript puro, o projeto é leve, modular e fácil de integrar.
+O **InMeta™ Torre e Grid** é uma aplicação web interativa desenvolvida para visualizar e gerenciar o status de apartamentos em um projeto de construção ou inspeção. Com uma interface intuitiva, a aplicação permite filtrar e destacar apartamentos com base em seu progresso, pendências e não conformidades, utilizando uma representação visual colorida e organizada. Construído com HTML, CSS e JavaScript puro, o projeto é leve, modular e fácil de integrar.
 
 ## Funcionalidades
 
 - **Visualização de Status com Cores**:
   - **Azul** (#4493f8): Apartamentos em andamento (sem `data_termino_inicial`).
+  - **Verde** (#3fb950): Apartamentos finalizados perfeitamente (100% concluídos, sem pendências ou NC).
   - **Amarelo** (#e3b341): Apartamentos finalizados com pendências (`qtd_pend_ultima_inspecao > 0`).
   - **Vermelho** (#f85149): Apartamentos com não conformidades (`qtd_nao_conformidades_ultima_inspecao > 0`).
-  - **Verde** (#3fb950): Apartamentos finalizados perfeitamente (100% concluídos, sem pendências ou NC).
-  - **Cinza** (#6b7280): Apartamentos sem dados ou finalizados (usado como padrão).
+  - **Cinza** (#6b7280): Apartamentos sem dados (usado como padrão).
 
 - **Filtros Interativos**:
   - **Modo "Em Andamento"**: Exibe apenas apartamentos em andamento (azuis), com pendências (amarelos) ou com não conformidades (vermelhos), ocultando os finalizados perfeitamente (verdes). O botão usa um círculo verde (inativo) que muda para cinza (ativo) com um efeito brilhante.
