@@ -603,7 +603,12 @@ function wireEvents(fvsIndex) {
   fvsSelect?.addEventListener('change', () => {
     const key = normFVSKey(fvsSelect.value);
     applyFVSSelection(key, fvsIndex, true);
-    render2DCards();
+    const host = document.getElementById('cards2d');
+    const focalY = host ? Math.floor(host.clientHeight / 2) : 0;
+    const focalX = host ? Math.floor(host.clientWidth / 2) : 0;
+    with2DScrollPreserved(() => {
+      render2DCards();
+    }, { focalY, focalX });
     render();
   });
 
@@ -623,7 +628,12 @@ function wireEvents(fvsIndex) {
     } else {
       applyFVSAndRefresh();
     }
-    render2DCards();
+    const host = document.getElementById('cards2d');
+    const focalY = host ? Math.floor(host.clientHeight / 2) : 0;
+    const focalX = host ? Math.floor(host.clientWidth / 2) : 0;
+    with2DScrollPreserved(() => {
+      render2DCards();
+    }, { focalY, focalX });
     render();
   });
 
@@ -643,7 +653,12 @@ function wireEvents(fvsIndex) {
     } else {
       applyFVSAndRefresh();
     }
-    render2DCards();
+    const host = document.getElementById('cards2d');
+    const focalY = host ? Math.floor(host.clientHeight / 2) : 0;
+    const focalX = host ? Math.floor(host.clientWidth / 2) : 0;
+    with2DScrollPreserved(() => {
+      render2DCards();
+    }, { focalY, focalX });
     render();
   });
 
