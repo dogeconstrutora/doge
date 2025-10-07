@@ -848,22 +848,63 @@ function with2DScrollPreserved(
   const yAbs = preTop + fy;
   const xAbs = preLeft + fx;
 
+  const cards = Array.from(host.querySelectorAll('.card'));
+  let anchor = null, anchorPrevY = null, anchorPrevX = null, anchorKey = null;
+  let bestY = Infinity, bestX = Infinity;
+
+  for (const el of cards) {
+    const cy = Number.parseFloat(el.style.top) || el.offsetTop || 0;
+    const cx = Number.parseFloat(el.style.left) || el.offsetLeft || 0;
+    const dy = Math.abs(cy - yAbs);
+    const dx = Math.abs(cx - xAbs);
+
+    if (dy < bestY || (dy === bestY && dx < bestX)) {
+      bestY = dy; bestX = dx;
+      anchor = el;
+      anchorPrevY = cy;
+      anchorPrevX = cx;
+      anchorKey = (el.dataset.apto || '') + '|' + (el.dataset.pav || '');
+    }
+  }
+
   action?.();
 
-  const newH = host.scrollHeight || 1;
-  const newW = host.scrollWidth || 1;
+  const restore = () => {
+    let newAnchor = null, newY = null, newX = null;
+    if (anchorKey) {
+      const [apt, pav] = anchorKey.split('|');
+      newAnchor = Array.from(host.querySelectorAll('.card'))
+        .find(el => el.dataset.apto === apt && el.dataset.pav === pav) || null;
+      if (newAnchor) {
+        newY = Number.parseFloat(newAnchor.style.top) || newAnchor.offsetTop || 0;
+        newX = Number.parseFloat(newAnchor.style.left) || newAnchor.offsetLeft || 0;
+      }
+    }
 
-  const ratioY = newH / preH;
-  const ratioX = newW / preW;
+    if (newAnchor != null && anchorPrevY != null && anchorPrevX != null) {
+      const dy = newY - anchorPrevY;
+      const dx = newX - anchorPrevX;
+      host.scrollTop = preTop + dy;
+      host.scrollLeft = preLeft + dx;
+    } else {
+      const newH = host.scrollHeight || 1;
+      const newW = host.scrollWidth || 1;
 
-  const desiredTop = ((yAbs) * ratioY) - fy;
-  const desiredLeft = ((xAbs) * ratioX) - fx;
+      const ratioY = newH / preH;
+      const ratioX = newW / preW;
 
-  const maxTop = Math.max(0, newH - host.clientHeight);
-  const maxLeft = Math.max(0, newW - host.clientWidth);
+      const desiredTop = ((preTop + fy) * ratioY) - fy;
+      const desiredLeft = ((preLeft + fx) * ratioX) - fx;
 
-  host.scrollTop = Math.max(0, Math.min(maxTop, desiredTop));
-  host.scrollLeft = Math.max(0, Math.min(maxLeft, desiredLeft));
+      const maxTop = Math.max(0, newH - host.clientHeight);
+      const maxLeft = Math.max(0, newW - host.clientWidth);
+
+      host.scrollTop = Math.max(0, Math.min(maxTop, desiredTop));
+      host.scrollLeft = Math.max(0, Math.min(maxLeft, desiredLeft));
+    }
+  };
+
+  requestAnimationFrame(() => requestAnimationFrame(restore));
 }
 
 function setupHudResizeObserver() {
