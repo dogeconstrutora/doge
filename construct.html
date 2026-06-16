@@ -616,7 +616,7 @@ function drawFrontal(){
     const y_world  = (h - GRID_PAD) - (cum[i] || 0);
     const y_screen = worldYToScreenY(y_world);
     ctxF.fillStyle = (isolatedFloor === i ? '#ffc107' : '#9fb0c3');
-    ctxF.fillText(String(i), leftMargin - 14, y_screen);
+    ctxF.fillText(String(i - 1), leftMargin - 14, y_screen);
   }
 }
 
