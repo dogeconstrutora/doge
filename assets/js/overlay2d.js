@@ -421,14 +421,11 @@ export function render2DCards(){
 
   const paneW = Math.max(240, host.clientWidth);
   const paneH = Math.max(180, host.clientHeight);
-  const PAGE_GAP = 120; // teste 120, depois ajuste
-
-  for (let p = 1; p <= maxPage; p++){
+  /*for (let p = 1; p <= maxPage; p++){
     const snap = document.createElement('div');
     snap.className = 'page-snap';
     snap.style.position = 'absolute';
-    //snap.style.left = `${(p-1) * paneW}px`;
-    snap.style.left = `${(p-1) * (paneW + PAGE_GAP)}px`;
+    snap.style.left = `${(p-1) * paneW}px`;
     snap.style.top = `0px`;
     snap.style.width = `${paneW}px`;
     snap.style.height = `${paneH}px`;
@@ -436,6 +433,8 @@ export function render2DCards(){
     snap.style.pointerEvents = 'none';
     frag.appendChild(snap);
   }
+  */
+  
 
   for (const band of perFloor){
     for (const it of band.items){
@@ -571,6 +570,50 @@ export function render2DCards(){
     const sum = items.reduce((acc, it) => acc + widthOf(baseW, it.scale ?? 1), 0);
     return sum + Math.max(0, items.length - 1) * gap;
   };
+const pageWidths = new Map();
+
+for (let p = 1; p <= maxPage; p++) {
+  let w = paneW;
+
+  for (const band of perFloor) {
+    const items = band.items.filter(
+      it => Number(it.page || 1) === p
+    );
+
+    if (!items.length) continue;
+
+    w = Math.max(
+      w,
+      calcTWScaled(items, cardW, hGap) + 40
+    );
+  }
+
+  pageWidths.set(p, w);
+}
+
+const pageOffsets = new Map();
+
+let accX = 0;
+
+for (let p = 1; p <= maxPage; p++) {
+  pageOffsets.set(p, accX);
+  accX += pageWidths.get(p);
+}
+
+for (let p = 1; p <= maxPage; p++) {
+  const snap = document.createElement('div');
+
+  snap.className = 'page-snap';
+  snap.style.position = 'absolute';
+  snap.style.left = `${pageOffsets.get(p)}px`;
+  snap.style.top = '0px';
+  snap.style.width = `${pageWidths.get(p)}px`;
+  snap.style.height = `${paneH}px`;
+  snap.style.scrollSnapAlign = 'start';
+  snap.style.pointerEvents = 'none';
+
+  frag.appendChild(snap);
+}
 
   let TWmax = 0;
   for (const band of perFloor){
@@ -584,6 +627,7 @@ export function render2DCards(){
       TWmax = Math.max(TWmax, calcTWScaled(items, cardW, hGap));
     }
   }
+  /*
   if (TWmax > paneW){
     const sx = paneW / TWmax;
     cardW = Math.max(MIN_W, Math.floor(cardW * sx));
@@ -591,7 +635,8 @@ export function render2DCards(){
     fontPx = Math.max(10, Math.floor(fontPx * sx));
     hGap  = Math.max(8, Math.floor(hGap  * sx));
   }
-
+  */
+ 
   const badgeFont = Math.max(8,  Math.min(16, Math.round(cardH * 0.15)));
   const badgePadV = Math.max(2,  Math.round(cardH * 0.055));
   const badgePadH = Math.max(4,  Math.round(cardW * 0.08));
@@ -623,12 +668,19 @@ export function render2DCards(){
       const items = byPage.get(p) || [];
       if (!items.length) continue;
 
+      /*const TWf = calcTWScaled(items, cardW, hGap);
+      let runX = ((p-1) * paneW) + Math.floor(paneW/2) - Math.floor(TWf/2);*/
+
       const TWf = calcTWScaled(items, cardW, hGap);
-      //let runX = ((p-1) * paneW) + Math.floor(paneW/2) - Math.floor(TWf/2);
+
+const pageX = pageOffsets.get(p);
+const pageW = pageWidths.get(p);
+
 let runX =
-  ((p-1) * (paneW + PAGE_GAP)) +
-  Math.floor(paneW/2) -
-  Math.floor(TWf/2);
+  pageX +
+  Math.floor(pageW / 2) -
+  Math.floor(TWf / 2);
+  
       for (const it of items){
         const el = it._el; if (!el) continue;
 

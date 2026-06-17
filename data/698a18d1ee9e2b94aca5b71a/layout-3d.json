@@ -635,7 +635,7 @@
     {
       "apto": "2",
       "nome": "Torre - Subsolo - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 0,
       "x": -3,
@@ -747,7 +747,7 @@
     {
       "apto": "102",
       "nome": "Torre - Térreo - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 1,
       "x": -3,
@@ -873,7 +873,7 @@
     {
       "apto": "202",
       "nome": "Torre - Pavimento 01 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 2,
       "x": -3,
@@ -999,7 +999,7 @@
     {
       "apto": "302",
       "nome": "Torre - Pavimento 02 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 3,
       "x": -3,
@@ -1139,7 +1139,7 @@
     {
       "apto": "402",
       "nome": "Torre - Pavimento 03 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 4,
       "x": -3,
@@ -1279,7 +1279,7 @@
     {
       "apto": "503",
       "nome": "Torre - Pavimento 04 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 5,
       "x": -10,
@@ -1321,7 +1321,7 @@
     {
       "apto": "503",
       "nome": "Torre - Pavimento 04 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 5,
       "x": -9,
@@ -1335,7 +1335,7 @@
     {
       "apto": "503",
       "nome": "Torre - Pavimento 04 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 5,
       "x": -3,
@@ -1363,7 +1363,7 @@
     {
       "apto": "506",
       "nome": "Torre - Pavimento 04 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 5,
       "x": -3,
@@ -1377,7 +1377,7 @@
     {
       "apto": "503",
       "nome": "Torre - Pavimento 04 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 5,
       "x": -1,
@@ -1405,7 +1405,7 @@
     {
       "apto": "503",
       "nome": "Torre - Pavimento 04 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 5,
       "x": -3,
@@ -1447,7 +1447,7 @@
     {
       "apto": "503",
       "nome": "Torre - Pavimento 04 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 5,
       "x": 0,
@@ -1601,7 +1601,7 @@
     {
       "apto": "603",
       "nome": "Torre - Pavimento 05 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 6,
       "x": -10,
@@ -1643,7 +1643,7 @@
     {
       "apto": "603",
       "nome": "Torre - Pavimento 05 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 6,
       "x": -9,
@@ -1657,7 +1657,7 @@
     {
       "apto": "603",
       "nome": "Torre - Pavimento 05 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 6,
       "x": -3,
@@ -1685,7 +1685,7 @@
     {
       "apto": "606",
       "nome": "Torre - Pavimento 05 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 6,
       "x": -3,
@@ -1699,7 +1699,7 @@
     {
       "apto": "603",
       "nome": "Torre - Pavimento 05 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 6,
       "x": -1,
@@ -1727,7 +1727,7 @@
     {
       "apto": "603",
       "nome": "Torre - Pavimento 05 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 6,
       "x": -3,
@@ -1769,7 +1769,7 @@
     {
       "apto": "603",
       "nome": "Torre - Pavimento 05 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 6,
       "x": 0,
@@ -1923,7 +1923,7 @@
     {
       "apto": "703",
       "nome": "Torre - Pavimento 06 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 7,
       "x": -10,
@@ -1965,7 +1965,7 @@
     {
       "apto": "703",
       "nome": "Torre - Pavimento 06 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 7,
       "x": -9,
@@ -1979,7 +1979,7 @@
     {
       "apto": "703",
       "nome": "Torre - Pavimento 06 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 7,
       "x": -3,
@@ -2007,7 +2007,7 @@
     {
       "apto": "706",
       "nome": "Torre - Pavimento 06 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 7,
       "x": -3,
@@ -2021,7 +2021,7 @@
     {
       "apto": "703",
       "nome": "Torre - Pavimento 06 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 7,
       "x": -1,
@@ -2049,7 +2049,7 @@
     {
       "apto": "703",
       "nome": "Torre - Pavimento 06 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 7,
       "x": -3,
@@ -2091,7 +2091,7 @@
     {
       "apto": "703",
       "nome": "Torre - Pavimento 06 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 7,
       "x": 0,
@@ -2245,7 +2245,7 @@
     {
       "apto": "803",
       "nome": "Torre - Pavimento 07 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 8,
       "x": -10,
@@ -2287,7 +2287,7 @@
     {
       "apto": "803",
       "nome": "Torre - Pavimento 07 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 8,
       "x": -9,
@@ -2301,7 +2301,7 @@
     {
       "apto": "803",
       "nome": "Torre - Pavimento 07 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 8,
       "x": -3,
@@ -2329,7 +2329,7 @@
     {
       "apto": "806",
       "nome": "Torre - Pavimento 07 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 8,
       "x": -3,
@@ -2343,7 +2343,7 @@
     {
       "apto": "803",
       "nome": "Torre - Pavimento 07 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 8,
       "x": -1,
@@ -2371,7 +2371,7 @@
     {
       "apto": "803",
       "nome": "Torre - Pavimento 07 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 8,
       "x": -3,
@@ -2413,7 +2413,7 @@
     {
       "apto": "803",
       "nome": "Torre - Pavimento 07 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 8,
       "x": 0,
@@ -2567,7 +2567,7 @@
     {
       "apto": "903",
       "nome": "Torre - Pavimento 08 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 9,
       "x": -10,
@@ -2609,7 +2609,7 @@
     {
       "apto": "903",
       "nome": "Torre - Pavimento 08 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 9,
       "x": -9,
@@ -2623,7 +2623,7 @@
     {
       "apto": "903",
       "nome": "Torre - Pavimento 08 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 9,
       "x": -3,
@@ -2651,7 +2651,7 @@
     {
       "apto": "906",
       "nome": "Torre - Pavimento 08 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 9,
       "x": -3,
@@ -2665,7 +2665,7 @@
     {
       "apto": "903",
       "nome": "Torre - Pavimento 08 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 9,
       "x": -1,
@@ -2693,7 +2693,7 @@
     {
       "apto": "903",
       "nome": "Torre - Pavimento 08 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 9,
       "x": -3,
@@ -2735,7 +2735,7 @@
     {
       "apto": "903",
       "nome": "Torre - Pavimento 08 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 9,
       "x": 0,
@@ -2889,7 +2889,7 @@
     {
       "apto": "1003",
       "nome": "Torre - Pavimento 09 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 10,
       "x": -10,
@@ -2931,7 +2931,7 @@
     {
       "apto": "1003",
       "nome": "Torre - Pavimento 09 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 10,
       "x": -9,
@@ -2945,7 +2945,7 @@
     {
       "apto": "1003",
       "nome": "Torre - Pavimento 09 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 10,
       "x": -3,
@@ -2973,7 +2973,7 @@
     {
       "apto": "1006",
       "nome": "Torre - Pavimento 09 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 10,
       "x": -3,
@@ -2987,7 +2987,7 @@
     {
       "apto": "1003",
       "nome": "Torre - Pavimento 09 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 10,
       "x": -1,
@@ -3015,7 +3015,7 @@
     {
       "apto": "1003",
       "nome": "Torre - Pavimento 09 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 10,
       "x": -3,
@@ -3057,7 +3057,7 @@
     {
       "apto": "1003",
       "nome": "Torre - Pavimento 09 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 10,
       "x": 0,
@@ -3211,7 +3211,7 @@
     {
       "apto": "1103",
       "nome": "Torre - Pavimento 10 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 11,
       "x": -10,
@@ -3253,7 +3253,7 @@
     {
       "apto": "1103",
       "nome": "Torre - Pavimento 10 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 11,
       "x": -9,
@@ -3267,7 +3267,7 @@
     {
       "apto": "1103",
       "nome": "Torre - Pavimento 10 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 11,
       "x": -3,
@@ -3295,7 +3295,7 @@
     {
       "apto": "1106",
       "nome": "Torre - Pavimento 10 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 11,
       "x": -3,
@@ -3309,7 +3309,7 @@
     {
       "apto": "1103",
       "nome": "Torre - Pavimento 10 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 11,
       "x": -1,
@@ -3337,7 +3337,7 @@
     {
       "apto": "1103",
       "nome": "Torre - Pavimento 10 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 11,
       "x": -3,
@@ -3379,7 +3379,7 @@
     {
       "apto": "1103",
       "nome": "Torre - Pavimento 10 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 11,
       "x": 0,
@@ -3533,7 +3533,7 @@
     {
       "apto": "1203",
       "nome": "Torre - Pavimento 11 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 12,
       "x": -10,
@@ -3575,7 +3575,7 @@
     {
       "apto": "1203",
       "nome": "Torre - Pavimento 11 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 12,
       "x": -9,
@@ -3589,7 +3589,7 @@
     {
       "apto": "1203",
       "nome": "Torre - Pavimento 11 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 12,
       "x": -3,
@@ -3617,7 +3617,7 @@
     {
       "apto": "1206",
       "nome": "Torre - Pavimento 11 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 12,
       "x": -3,
@@ -3631,7 +3631,7 @@
     {
       "apto": "1203",
       "nome": "Torre - Pavimento 11 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 12,
       "x": -1,
@@ -3659,7 +3659,7 @@
     {
       "apto": "1203",
       "nome": "Torre - Pavimento 11 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 12,
       "x": -3,
@@ -3701,7 +3701,7 @@
     {
       "apto": "1203",
       "nome": "Torre - Pavimento 11 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 12,
       "x": 0,
@@ -3855,7 +3855,7 @@
     {
       "apto": "1303",
       "nome": "Torre - Pavimento 12 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 13,
       "x": -10,
@@ -3897,7 +3897,7 @@
     {
       "apto": "1303",
       "nome": "Torre - Pavimento 12 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 13,
       "x": -9,
@@ -3911,7 +3911,7 @@
     {
       "apto": "1303",
       "nome": "Torre - Pavimento 12 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 13,
       "x": -3,
@@ -3939,7 +3939,7 @@
     {
       "apto": "1306",
       "nome": "Torre - Pavimento 12 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 13,
       "x": -3,
@@ -3953,7 +3953,7 @@
     {
       "apto": "1303",
       "nome": "Torre - Pavimento 12 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 13,
       "x": -1,
@@ -3981,7 +3981,7 @@
     {
       "apto": "1303",
       "nome": "Torre - Pavimento 12 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 13,
       "x": -3,
@@ -4023,7 +4023,7 @@
     {
       "apto": "1303",
       "nome": "Torre - Pavimento 12 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 13,
       "x": 0,
@@ -4177,7 +4177,7 @@
     {
       "apto": "1403",
       "nome": "Torre - Pavimento 13 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 14,
       "x": -10,
@@ -4219,7 +4219,7 @@
     {
       "apto": "1403",
       "nome": "Torre - Pavimento 13 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 14,
       "x": -9,
@@ -4233,7 +4233,7 @@
     {
       "apto": "1403",
       "nome": "Torre - Pavimento 13 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 14,
       "x": -3,
@@ -4261,7 +4261,7 @@
     {
       "apto": "1406",
       "nome": "Torre - Pavimento 13 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 14,
       "x": -3,
@@ -4275,7 +4275,7 @@
     {
       "apto": "1403",
       "nome": "Torre - Pavimento 13 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 14,
       "x": -1,
@@ -4303,7 +4303,7 @@
     {
       "apto": "1403",
       "nome": "Torre - Pavimento 13 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 14,
       "x": -3,
@@ -4345,7 +4345,7 @@
     {
       "apto": "1403",
       "nome": "Torre - Pavimento 13 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 14,
       "x": 0,
@@ -4499,7 +4499,7 @@
     {
       "apto": "1503",
       "nome": "Torre - Pavimento 14 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 15,
       "x": -10,
@@ -4541,7 +4541,7 @@
     {
       "apto": "1503",
       "nome": "Torre - Pavimento 14 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 15,
       "x": -9,
@@ -4555,7 +4555,7 @@
     {
       "apto": "1503",
       "nome": "Torre - Pavimento 14 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 15,
       "x": -3,
@@ -4583,7 +4583,7 @@
     {
       "apto": "1506",
       "nome": "Torre - Pavimento 14 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 15,
       "x": -3,
@@ -4597,7 +4597,7 @@
     {
       "apto": "1503",
       "nome": "Torre - Pavimento 14 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 15,
       "x": -1,
@@ -4625,7 +4625,7 @@
     {
       "apto": "1503",
       "nome": "Torre - Pavimento 14 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 15,
       "x": -3,
@@ -4667,7 +4667,7 @@
     {
       "apto": "1503",
       "nome": "Torre - Pavimento 14 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 15,
       "x": 0,
@@ -4821,7 +4821,7 @@
     {
       "apto": "1603",
       "nome": "Torre - Pavimento 15 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 16,
       "x": -10,
@@ -4863,7 +4863,7 @@
     {
       "apto": "1603",
       "nome": "Torre - Pavimento 15 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 16,
       "x": -9,
@@ -4877,7 +4877,7 @@
     {
       "apto": "1603",
       "nome": "Torre - Pavimento 15 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 16,
       "x": -3,
@@ -4905,7 +4905,7 @@
     {
       "apto": "1606",
       "nome": "Torre - Pavimento 15 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 16,
       "x": -3,
@@ -4919,7 +4919,7 @@
     {
       "apto": "1603",
       "nome": "Torre - Pavimento 15 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 16,
       "x": -1,
@@ -4947,7 +4947,7 @@
     {
       "apto": "1603",
       "nome": "Torre - Pavimento 15 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 16,
       "x": -3,
@@ -4989,7 +4989,7 @@
     {
       "apto": "1603",
       "nome": "Torre - Pavimento 15 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 16,
       "x": 0,
@@ -5143,7 +5143,7 @@
     {
       "apto": "1703",
       "nome": "Torre - Pavimento 16 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 17,
       "x": -10,
@@ -5185,7 +5185,7 @@
     {
       "apto": "1703",
       "nome": "Torre - Pavimento 16 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 17,
       "x": -9,
@@ -5199,7 +5199,7 @@
     {
       "apto": "1703",
       "nome": "Torre - Pavimento 16 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 17,
       "x": -3,
@@ -5227,7 +5227,7 @@
     {
       "apto": "1706",
       "nome": "Torre - Pavimento 16 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 17,
       "x": -3,
@@ -5241,7 +5241,7 @@
     {
       "apto": "1703",
       "nome": "Torre - Pavimento 16 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 17,
       "x": -1,
@@ -5269,7 +5269,7 @@
     {
       "apto": "1703",
       "nome": "Torre - Pavimento 16 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 17,
       "x": -3,
@@ -5311,7 +5311,7 @@
     {
       "apto": "1703",
       "nome": "Torre - Pavimento 16 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 17,
       "x": 0,
@@ -5465,7 +5465,7 @@
     {
       "apto": "1803",
       "nome": "Torre - Pavimento 17 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 18,
       "x": -10,
@@ -5507,7 +5507,7 @@
     {
       "apto": "1803",
       "nome": "Torre - Pavimento 17 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 18,
       "x": -9,
@@ -5521,7 +5521,7 @@
     {
       "apto": "1803",
       "nome": "Torre - Pavimento 17 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 18,
       "x": -3,
@@ -5549,7 +5549,7 @@
     {
       "apto": "1806",
       "nome": "Torre - Pavimento 17 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 18,
       "x": -3,
@@ -5563,7 +5563,7 @@
     {
       "apto": "1803",
       "nome": "Torre - Pavimento 17 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 18,
       "x": -1,
@@ -5591,7 +5591,7 @@
     {
       "apto": "1803",
       "nome": "Torre - Pavimento 17 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 18,
       "x": -3,
@@ -5633,7 +5633,7 @@
     {
       "apto": "1803",
       "nome": "Torre - Pavimento 17 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 18,
       "x": 0,
@@ -5773,7 +5773,7 @@
     {
       "apto": "1903",
       "nome": "Torre - Pavimento 18 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 19,
       "x": -10,
@@ -5801,7 +5801,7 @@
     {
       "apto": "1903",
       "nome": "Torre - Pavimento 18 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 19,
       "x": -17,
@@ -5815,7 +5815,7 @@
     {
       "apto": "1903",
       "nome": "Torre - Pavimento 18 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 19,
       "x": -6,
@@ -5829,7 +5829,7 @@
     {
       "apto": "1903",
       "nome": "Torre - Pavimento 18 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 19,
       "x": -3,
@@ -5843,7 +5843,7 @@
     {
       "apto": "1904",
       "nome": "Torre - Pavimento 18 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 19,
       "x": -3,
@@ -5857,7 +5857,7 @@
     {
       "apto": "1903",
       "nome": "Torre - Pavimento 18 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 19,
       "x": -1,
@@ -5871,7 +5871,7 @@
     {
       "apto": "1903",
       "nome": "Torre - Pavimento 18 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 19,
       "x": -3,
@@ -5885,7 +5885,7 @@
     {
       "apto": "1903",
       "nome": "Torre - Pavimento 18 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 19,
       "x": 0,
@@ -5899,7 +5899,7 @@
     {
       "apto": "1903",
       "nome": "Torre - Pavimento 18 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 19,
       "x": 1,
@@ -5913,7 +5913,7 @@
     {
       "apto": "1903",
       "nome": "Torre - Pavimento 18 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 19,
       "x": -15,
@@ -5997,7 +5997,7 @@
     {
       "apto": "2003",
       "nome": "Torre - Pavimento 19 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 20,
       "x": -10,
@@ -6025,7 +6025,7 @@
     {
       "apto": "2003",
       "nome": "Torre - Pavimento 19 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 20,
       "x": -17,
@@ -6039,7 +6039,7 @@
     {
       "apto": "2003",
       "nome": "Torre - Pavimento 19 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 20,
       "x": -6,
@@ -6053,7 +6053,7 @@
     {
       "apto": "2003",
       "nome": "Torre - Pavimento 19 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 20,
       "x": -3,
@@ -6067,7 +6067,7 @@
     {
       "apto": "2004",
       "nome": "Torre - Pavimento 19 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 20,
       "x": -3,
@@ -6081,7 +6081,7 @@
     {
       "apto": "2003",
       "nome": "Torre - Pavimento 19 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 20,
       "x": -1,
@@ -6095,7 +6095,7 @@
     {
       "apto": "2003",
       "nome": "Torre - Pavimento 19 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 20,
       "x": -3,
@@ -6109,7 +6109,7 @@
     {
       "apto": "2003",
       "nome": "Torre - Pavimento 19 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 20,
       "x": -15,
@@ -6193,7 +6193,7 @@
     {
       "apto": "2103",
       "nome": "Torre - Pavimento 20 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 21,
       "x": -10,
@@ -6235,7 +6235,7 @@
     {
       "apto": "2103",
       "nome": "Torre - Pavimento 20 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 21,
       "x": -8,
@@ -6249,7 +6249,7 @@
     {
       "apto": "2103",
       "nome": "Torre - Pavimento 20 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 21,
       "x": -3,
@@ -6263,7 +6263,7 @@
     {
       "apto": "2105",
       "nome": "Torre - Pavimento 20 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 21,
       "x": -3,
@@ -6277,7 +6277,7 @@
     {
       "apto": "2103",
       "nome": "Torre - Pavimento 20 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 21,
       "x": -1,
@@ -6291,7 +6291,7 @@
     {
       "apto": "2103",
       "nome": "Torre - Pavimento 20 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 21,
       "x": -3,
@@ -6417,7 +6417,7 @@
     {
       "apto": "2203",
       "nome": "Torre - Pavimento 21 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 22,
       "x": -10,
@@ -6459,7 +6459,7 @@
     {
       "apto": "2203",
       "nome": "Torre - Pavimento 21 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 22,
       "x": -8,
@@ -6473,7 +6473,7 @@
     {
       "apto": "2203",
       "nome": "Torre - Pavimento 21 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 22,
       "x": -3,
@@ -6487,7 +6487,7 @@
     {
       "apto": "2205",
       "nome": "Torre - Pavimento 21 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 22,
       "x": -3,
@@ -6501,7 +6501,7 @@
     {
       "apto": "2203",
       "nome": "Torre - Pavimento 21 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 22,
       "x": -1,
@@ -6515,7 +6515,7 @@
     {
       "apto": "2203",
       "nome": "Torre - Pavimento 21 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 22,
       "x": -3,
@@ -6641,7 +6641,7 @@
     {
       "apto": "2303",
       "nome": "Torre - Pavimento 22 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 23,
       "x": -10,
@@ -6683,7 +6683,7 @@
     {
       "apto": "2303",
       "nome": "Torre - Pavimento 22 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 23,
       "x": -8,
@@ -6697,7 +6697,7 @@
     {
       "apto": "2303",
       "nome": "Torre - Pavimento 22 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 23,
       "x": -3,
@@ -6711,7 +6711,7 @@
     {
       "apto": "2305",
       "nome": "Torre - Pavimento 22 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 23,
       "x": -3,
@@ -6725,7 +6725,7 @@
     {
       "apto": "2303",
       "nome": "Torre - Pavimento 22 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 23,
       "x": -1,
@@ -6739,7 +6739,7 @@
     {
       "apto": "2303",
       "nome": "Torre - Pavimento 22 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 23,
       "x": -3,
@@ -6865,7 +6865,7 @@
     {
       "apto": "2403",
       "nome": "Torre - Pavimento 23 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 24,
       "x": -10,
@@ -6907,7 +6907,7 @@
     {
       "apto": "2403",
       "nome": "Torre - Pavimento 23 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 24,
       "x": -8,
@@ -6921,7 +6921,7 @@
     {
       "apto": "2403",
       "nome": "Torre - Pavimento 23 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 24,
       "x": -3,
@@ -6935,7 +6935,7 @@
     {
       "apto": "2405",
       "nome": "Torre - Pavimento 23 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 24,
       "x": -3,
@@ -6949,7 +6949,7 @@
     {
       "apto": "2403",
       "nome": "Torre - Pavimento 23 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 24,
       "x": -1,
@@ -6963,7 +6963,7 @@
     {
       "apto": "2403",
       "nome": "Torre - Pavimento 23 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 24,
       "x": -3,
@@ -7089,7 +7089,7 @@
     {
       "apto": "2503",
       "nome": "Torre - Pavimento 24 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 25,
       "x": -10,
@@ -7131,7 +7131,7 @@
     {
       "apto": "2503",
       "nome": "Torre - Pavimento 24 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 25,
       "x": -8,
@@ -7145,7 +7145,7 @@
     {
       "apto": "2503",
       "nome": "Torre - Pavimento 24 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 25,
       "x": -3,
@@ -7159,7 +7159,7 @@
     {
       "apto": "2505",
       "nome": "Torre - Pavimento 24 - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 25,
       "x": -3,
@@ -7173,7 +7173,7 @@
     {
       "apto": "2503",
       "nome": "Torre - Pavimento 24 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 25,
       "x": -1,
@@ -7187,7 +7187,7 @@
     {
       "apto": "2503",
       "nome": "Torre - Pavimento 24 - Hall",
-      "ordemcol": 0,
+      "ordemcol": 1,
       "color": "#58a6ff",
       "andar": 25,
       "x": -3,
@@ -7313,7 +7313,7 @@
     {
       "apto": "2602",
       "nome": "Torre - Barrilete - Escada",
-      "ordemcol": 0,
+      "ordemcol": 2,
       "color": "#50e3c2",
       "andar": 26,
       "x": -3,
