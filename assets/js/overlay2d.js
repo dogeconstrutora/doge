@@ -421,11 +421,14 @@ export function render2DCards(){
 
   const paneW = Math.max(240, host.clientWidth);
   const paneH = Math.max(180, host.clientHeight);
+  const PAGE_GAP = 120; // teste 120, depois ajuste
+
   for (let p = 1; p <= maxPage; p++){
     const snap = document.createElement('div');
     snap.className = 'page-snap';
     snap.style.position = 'absolute';
-    snap.style.left = `${(p-1) * paneW}px`;
+    //snap.style.left = `${(p-1) * paneW}px`;
+    snap.style.left = `${(p-1) * (paneW + PAGE_GAP)}px`;
     snap.style.top = `0px`;
     snap.style.width = `${paneW}px`;
     snap.style.height = `${paneH}px`;
@@ -622,13 +625,10 @@ export function render2DCards(){
 
       const TWf = calcTWScaled(items, cardW, hGap);
       //let runX = ((p-1) * paneW) + Math.floor(paneW/2) - Math.floor(TWf/2);
-      const LEFT_PAD = Math.floor(cardW / 2);
-
-let runX = Math.max(
-  ((p - 1) * paneW) + LEFT_PAD,
-  ((p - 1) * paneW) + Math.floor(paneW / 2) - Math.floor(TWf / 2)
-);
-
+let runX =
+  ((p-1) * (paneW + PAGE_GAP)) +
+  Math.floor(paneW/2) -
+  Math.floor(TWf/2);
       for (const it of items){
         const el = it._el; if (!el) continue;
 
