@@ -621,7 +621,13 @@ export function render2DCards(){
       if (!items.length) continue;
 
       const TWf = calcTWScaled(items, cardW, hGap);
-      let runX = ((p-1) * paneW) + Math.floor(paneW/2) - Math.floor(TWf/2);
+      //let runX = ((p-1) * paneW) + Math.floor(paneW/2) - Math.floor(TWf/2);
+      const LEFT_PAD = Math.floor(cardW / 2);
+
+let runX = Math.max(
+  ((p - 1) * paneW) + LEFT_PAD,
+  ((p - 1) * paneW) + Math.floor(paneW / 2) - Math.floor(TWf / 2)
+);
 
       for (const it of items){
         const el = it._el; if (!el) continue;
